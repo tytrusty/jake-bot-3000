@@ -27,7 +27,7 @@ def random_pixel_select(screenshot: np.ndarray, target_hex: str, tolerance: int 
     random_pixel = random.choice(pixel_coords)
     return random_pixel
 
-def smart_pixel_select(screenshot: np.ndarray, target_hex: str, tolerance: int = 10, return_debug: bool = False, downsample_factor: int = 4, center_falloff: float = 2.0):
+def smart_pixel_select(screenshot: np.ndarray, target_hex: str, tolerance: int = 10, return_debug: bool = False, downsample_factor: int = 4, center_falloff: float = 4.0):
     """
     Smart pixel selection using blob detection and green exclusion
     
