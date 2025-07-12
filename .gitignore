@@ -1,0 +1,4 @@
+food_area_config.txt
+health_bar_config.txt
+*.png
+__pycache__/
