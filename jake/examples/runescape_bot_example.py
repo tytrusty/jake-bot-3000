@@ -3,7 +3,7 @@
 RuneScape Bot Example
 
 This is an example script demonstrating how to use the RuneScape bot framework.
-It provides an interactive interface for configuring and running the bot.
+It loads configuration from a JSON file and provides an interactive interface.
 """
 
 import sys
@@ -13,81 +13,66 @@ import random
 import keyboard
 import numpy as np
 import cv2
+import argparse
 
 # Add the parent directory to the Python path to import the bot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from runescape_bot import RuneScapeBot
+from config_manager import ConfigurationManager
 import screenshot_utils
 import color_utils
 import pixel_selection
-
-# Optional import for human path finder
-try:
-    from path.human_path_finder import HumanPath
-    HUMAN_PATH_AVAILABLE = True
-except ImportError:
-    HUMAN_PATH_AVAILABLE = False
-    print("Human path finder not available. Install required dependencies for human-like mouse movement.")
+from path.human_path_finder import HumanPath
 
 def main():
     """Main function for the RuneScape bot example."""
-    # Check if user wants to use human-like paths
-    use_human_paths = False
-    speed_range = (0.5, 2.0)  # Default speed range
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='RuneScape Bot Example')
+    parser.add_argument('config_file', nargs='?', default='bot_config.json',
+                       help='Path to configuration file (default: bot_config.json)')
+    args = parser.parse_args()
     
-    if HUMAN_PATH_AVAILABLE:
-        human_path_choice = input("Use human-like mouse movement? (y/n, default: n): ").strip().lower()
-        use_human_paths = human_path_choice == 'y'
-        
-        if use_human_paths:
-            # Configure speed range
-            print("\nSpeed range configuration:")
-            print("This controls how fast the mouse moves (multiplier of base speed)")
-            print(f"Current default: {speed_range[0]:.1f}x to {speed_range[1]:.1f}x")
-            
-            configure_speed = input("Configure speed range? (y/n, default: n): ").strip().lower()
-            if configure_speed == 'y':
-                print("\nSpeed range options:")
-                print("1. Slow (0.2x to 0.5x) - Very slow, careful movements")
-                print("2. Normal (0.5x to 2.0x) - Default human-like variation")
-                print("3. Fast (1.5x to 3.0x) - Quick movements")
-                print("4. Custom - Specify your own range")
-                
-                speed_choice = input("Choose speed option (1-4, default: 2): ").strip()
-                if speed_choice == "1":
-                    speed_range = (0.2, 0.5)
-                elif speed_choice == "3":
-                    speed_range = (1.5, 3.0)
-                elif speed_choice == "4":
-                    try:
-                        min_speed = float(input("Enter minimum speed multiplier (e.g., 0.5): ").strip())
-                        max_speed = float(input("Enter maximum speed multiplier (e.g., 2.0): ").strip())
-                        speed_range = (min_speed, max_speed)
-                    except ValueError:
-                        print("Invalid input, using default speed range")
-                        speed_range = (0.5, 2.0)
-                else:
-                    speed_range = (0.5, 2.0)  # Default
-                
-                print(f"Speed range set to: {speed_range[0]:.1f}x to {speed_range[1]:.1f}x")
+    # Load configuration
+    config_manager = ConfigurationManager(args.config_file)
+    if not config_manager.load_config():
+        print(f"\nConfiguration file '{args.config_file}' not found or invalid.")
+        print("Please run 'python init_config.py' to create a configuration file.")
+        return
     
-    bot = RuneScapeBot(use_human_paths=use_human_paths)
+    # Display configuration summary
+    config_manager.print_config_summary()
     
-    # Update speed range if human paths are enabled
+    # Initialize bot with configuration
+    use_human_paths = config_manager.is_human_movement_enabled()
+    bot = RuneScapeBot(config_manager=config_manager, use_human_paths=use_human_paths)
+    
+    # Update human path settings if enabled
     if use_human_paths and bot.human_path:
+        human_config = config_manager.get_human_movement_config()
+        speed_range = config_manager.get_speed_range()
         bot.human_path.speed_range = speed_range
+        
+        # Update other human path settings
+        if 'use_random_selection' in human_config:
+            bot.human_path.use_random_selection = human_config['use_random_selection']
+        if 'k' in human_config:
+            bot.human_path.k = human_config['k']
+        if 'use_iterative_movement' in human_config:
+            bot.human_path.use_iterative_movement = human_config['use_iterative_movement']
+        if 'max_iterations' in human_config:
+            bot.human_path.max_iterations = human_config['max_iterations']
+        if 'tolerance' in human_config:
+            bot.human_path.tolerance = human_config['tolerance']
     
     print("RuneScape Bot")
     print("1. Attack Bot (Find pixels by color)")
     print("2. Debug Screenshot")
-    print("3. Find Health Bar Position")
-    print("4. Find Food Area")
-    print("5. Configure Loot Pickup")
-    print("6. Exit")
+    print("3. Reconfigure Settings")
+    print("4. Exit")
     
     while True:
-        choice = input("Choose an option (1-6): ").strip()
+        choice = input("Choose an option (1-4): ").strip()
         
         if choice == "1":
             # Attack bot functionality
@@ -102,45 +87,36 @@ def main():
             bot.window_region = window_region
             print(f"Found RuneScape window at: {window_region}")
             
-            # Get target color from user
-            target_color = input("Enter target hex color (default: 00FFFFFA): ").strip()
+            # Get target color from user (with default from config)
+            combat_config = config_manager.get_combat_config()
+            default_color = combat_config.get('default_target_color', '00FFFFFA')
+            target_color = input(f"Enter target hex color (default: {default_color}): ").strip()
             if not target_color:
-                target_color = "00FFFFFA"
+                target_color = default_color
             
-            # Get pixel selection method
-            print("\nPixel selection methods:")
-            print("1. Smart (blob-based with green exclusion)")
-            print("2. Random (original method)")
-            method_choice = input("Choose pixel selection method (1-2, default: 1): ").strip()
-            if method_choice == "2":
-                pixel_method = "random"
-            else:
-                pixel_method = "smart" 
+            # Get pixel selection method from config
+            pixel_method = combat_config.get('pixel_method', 'smart')
             
-            # Check for food area configuration
-            food_area = bot.load_food_area()
-            if food_area is None:
-                print("\nNo food area configured. Auto-eating will be disabled.")
-                setup_food = input("Would you like to set up food area now? (y/n): ").strip().lower()
-                if setup_food == 'y':
-                    food_area = bot.setup_food_area()
+            # Get food area from config
+            food_area = None
+            if config_manager.is_food_area_enabled():
+                food_area = config_manager.get_food_area_coordinates()
+                if food_area:
+                    print(f"Using configured food area: {food_area}")
                 else:
-                    print("Continuing without auto-eating. You can set up food area later with option 4.")
-            
-            # Get red threshold for health monitoring
-            red_threshold_str = input("Enter red threshold for health monitoring (default 5): ").strip()
-            if not red_threshold_str:
-                red_threshold = 5
+                    print("Food area enabled but coordinates not found in config")
             else:
-                red_threshold = int(red_threshold_str)
+                print("Auto-eating disabled in configuration")
             
-            # Get random mouse movement option
-            random_mouse_str = input("Enable random mouse movement during combat? (y/n, default: n): ").strip().lower()
-            random_mouse_movement = random_mouse_str == 'y'
+            # Get red threshold from config
+            food_config = config_manager.get_food_area_config()
+            red_threshold = food_config.get('red_threshold', 5)
             
-            # Get break system option
-            break_str = input("Enable automatic breaks (2-6 min breaks every 29-33 min)? (y/n, default: n): ").strip().lower()
-            enable_breaks = break_str == 'y'
+            # Get random mouse movement from config
+            random_mouse_movement = config_manager.is_random_mouse_movement_enabled()
+            
+            # Get break settings from config
+            enable_breaks = config_manager.is_breaks_enabled()
             
             # Run attack sequence
             print(f"\nStarting attack bot with color: {target_color}")
@@ -155,7 +131,8 @@ def main():
             else:
                 print("Random mouse movement during combat: DISABLED")
             if enable_breaks:
-                print("Automatic breaks: ENABLED (2-6 min breaks every 29-33 min)")
+                break_config = combat_config
+                print(f"Automatic breaks: ENABLED ({break_config.get('break_interval_min', 29)}-{break_config.get('break_interval_max', 33)} min intervals, {break_config.get('break_duration_min', 2)}-{break_config.get('break_duration_max', 6)} min breaks)")
             else:
                 print("Automatic breaks: DISABLED")
             print("Press 'q' to stop the attack sequence")
@@ -176,12 +153,19 @@ def main():
                     session_duration = current_time - session_start_time
                     time_since_last_break = current_time - last_break_time
                     
-                    # Take a break every 29-33 minutes
-                    break_interval = random.uniform(29 * 60, 33 * 60)  # 29-33 minutes in seconds
+                    # Get break settings from config
+                    break_config = combat_config
+                    break_interval = random.uniform(
+                        break_config.get('break_interval_min', 29) * 60,
+                        break_config.get('break_interval_max', 33) * 60
+                    )
                     
                     if time_since_last_break >= break_interval:
-                        # Calculate break duration (2-6 minutes)
-                        break_duration = random.uniform(2 * 60, 6 * 60)  # 2-6 minutes in seconds
+                        # Calculate break duration from config
+                        break_duration = random.uniform(
+                            break_config.get('break_duration_min', 2) * 60,
+                            break_config.get('break_duration_max', 6) * 60
+                        )
                         break_minutes = break_duration / 60
                         
                         # Log break to file
@@ -232,7 +216,14 @@ def main():
                             continue
                 
                 # Run one attack sequence with food eating
-                success = bot.attack_sequence(target_color, food_area=food_area, red_threshold=red_threshold, pixel_method=pixel_method, random_mouse_movement=random_mouse_movement, enable_breaks=enable_breaks)
+                success = bot.attack_sequence(
+                    target_color, 
+                    food_area=food_area, 
+                    red_threshold=red_threshold, 
+                    pixel_method=pixel_method, 
+                    random_mouse_movement=random_mouse_movement, 
+                    enable_breaks=enable_breaks
+                )
                 
                 if success:
                     print("Attack successful! Waiting before next attack...")
@@ -330,26 +321,15 @@ def main():
                 continue
             else:
                 print("Invalid debug choice.")
+        
         elif choice == "3":
-            # Find health bar position
-            print("\n=== Health Bar Position Finder ===")
-            
-            # Find RuneScape window first
-            window_region = bot.find_runescape_window()
-            if not window_region:
-                print("Could not find RuneScape window. Make sure the game is running.")
-                continue
-            
-            bot.window_region = window_region
-            print(f"Found RuneScape window at: {window_region}")
-            
-            # Run health bar position finder
-            bot.find_health_bar_position()
+            # Reconfigure settings
+            print("\n=== Reconfigure Settings ===")
+            print("To reconfigure settings, run:")
+            print("python init_config.py")
+            print("\nThis will create a new configuration file with your updated settings.")
+        
         elif choice == "4":
-            bot.setup_food_area()
-        elif choice == "5":
-            bot.configure_loot_pickup()
-        elif choice == "6":
             print("Goodbye!")
             break
         else:

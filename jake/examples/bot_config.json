@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "description": "RuneScape Bot Configuration",
+  "human_movement": {
+    "enabled": true,
+    "speed_range": [
+      0.5,
+      2.0
+    ],
+    "use_random_selection": true,
+    "k_nearest": 8,
+    "use_iterative_movement": true,
+    "max_iterations": 5,
+    "tolerance": 10.0
+  },
+  "health_bar": {
+    "x": 18,
+    "y": 107,
+    "color": "078A35"
+  },
+  "food_area": {
+    "enabled": true,
+    "coordinates": [
+      1379,
+      1007,
+      1604,
+      1071
+    ],
+    "red_threshold": 5
+  },
+  "loot_pickup": {
+    "enabled": true,
+    "loot_color": "AA00FFFF",
+    "tolerance": 20,
+    "max_distance": 500,
+    "save_debug": true,
+    "inventory_area": [
+      1376,
+      942,
+      1406,
+      972
+    ],
+    "bury": true
+  },
+  "combat": {
+    "default_target_color": "00FFFFFA",
+    "pixel_method": "smart",
+    "random_mouse_movement": true,
+    "enable_breaks": true,
+    "break_interval_min": 29,
+    "break_interval_max": 33,
+    "break_duration_min": 2,
+    "break_duration_max": 6
+  },
+  "debug": {
+    "save_screenshots": true,
+    "screenshot_dir": "debug_screenshots"
+  }
+}

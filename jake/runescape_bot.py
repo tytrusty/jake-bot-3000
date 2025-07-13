@@ -15,27 +15,22 @@ import pixel_selection
 from scipy.ndimage import label, binary_dilation
 import math
 from sklearn.cluster import DBSCAN
-
-# Optional import for human path finder
-try:
-    from path.human_path_finder import HumanPath
-    HUMAN_PATH_AVAILABLE = True
-except ImportError:
-    HUMAN_PATH_AVAILABLE = False
-    print("Human path finder not available. Install required dependencies for human-like mouse movement.")
+from path.human_path_finder import HumanPath
+from config_manager import ConfigurationManager
 
 # Configure PyAutoGUI for safety
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.1
 
 class RuneScapeBot:
-    def __init__(self, use_human_paths: bool = False):
+    def __init__(self, config_manager: ConfigurationManager, use_human_paths: bool = False):
         self.running = False
         self.window_title = "RuneLite"
         self.window_region: Optional[Tuple[int, int, int, int]] = None
         self.templates_dir = "templates"
         self.in_combat = False  # Combat status flag
-        self.use_human_paths = use_human_paths and HUMAN_PATH_AVAILABLE
+        self.use_human_paths = use_human_paths
+        self.config_manager = config_manager
         
         # Create templates directory if it doesn't exist
         if not os.path.exists(self.templates_dir):
@@ -686,7 +681,7 @@ class RuneScapeBot:
         if health_x is None or health_y is None:
             health_pos = self.load_health_bar_position()
             if health_pos is None:
-                print("No health bar position found. Please run the health bar position finder first.")
+                print("No health bar position found. Please configure health bar position in your config file.")
                 return False
             health_x, health_y = health_pos
         
@@ -695,7 +690,7 @@ class RuneScapeBot:
             food_area = self.load_food_area()
             if food_area is None:
                 print("No food area configured. Auto-eating will be disabled.")
-                print("Run option 8 to set up food area for auto-eating.")
+                print("Configure food area in your config file to enable auto-eating.")
         
         # Step 0: Check if already in combat (mob auto-attacked after previous death)
         print("Step 0: Checking if already in combat...")
@@ -880,290 +875,39 @@ class RuneScapeBot:
         except Exception as e:
             print(f"Error checking combat status by color: {e}")
             return False
-
-    def find_health_bar_position(self) -> Optional[Tuple[int, int]]:
-        """
-        Interactive tool to find the health bar position
-        """
-        print("\n=== Health Bar Position Finder ===")
-        print("1. Attack a mob to make their health bar appear")
-        print("2. Move your mouse to the green health bar pixel (#048834)")
-        print("3. You have 3 seconds to position your mouse...")
-        
-        for i in range(3, 0, -1):
-            print(f"{i}...", end=" ", flush=True)
-            time.sleep(1)
-        print()
-        
-        # Get mouse position
-        mouse_x, mouse_y = pyautogui.position()
-        rgb_color = screenshot_utils.get_pixel_color_at_position(mouse_x, mouse_y)
-        hex_color = color_utils.rgb_to_hex(rgb_color)
-        
-        print(f"\nHealth bar position: ({mouse_x}, {mouse_y})")
-        print(f"Color: RGB{rgb_color} = #{hex_color}")
-        
-        # Save this position for future use
-        save_choice = input("Save this position? (y/n): ").strip().lower()
-        if save_choice == 'y':
-            # Save to a simple config file
-            config_path = "health_bar_config.txt"
-            with open(config_path, 'w') as f:
-                f.write(f"{mouse_x},{mouse_y},{hex_color}")
-            print(f"Position saved to {config_path}")
-        
-        return (mouse_x, mouse_y)
     
     def load_health_bar_position(self) -> Optional[Tuple[int, int]]:
         """
-        Load saved health bar position from config file
+        Load saved health bar position from config manager
         """
-        config_path = "health_bar_config.txt"
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    line = f.read().strip()
-                    x, y, color = line.split(',')
-                    print(f"Loaded health bar position: ({x}, {y}) with color #{color}")
-                    return (int(x), int(y))
-            except Exception as e:
-                print(f"Error loading health bar position: {e}")
+        health_pos = self.config_manager.get_health_bar_position()
+        if health_pos:
+            print(f"Loaded health bar position from config: {health_pos}")
+            return health_pos
         return None
-
-    def setup_food_area(self) -> Optional[Tuple[int, int, int, int]]:
-        """
-        Interactive setup for food area coordinates
-        """
-        print("\n=== Food Area Setup ===")
-        print("You need to specify the food area as a rectangle.")
-        print("This should be the area where your food is located in your inventory.")
-        
-        try:
-            print("\nStep 1: Move mouse to bottom-left corner of food area")
-            print("You have 5 seconds to position your mouse...")
-            for i in range(5, 0, -1):
-                print(f"{i}...", end=" ", flush=True)
-                time.sleep(1)
-            print()
-            
-            x1, y1 = pyautogui.position()
-            print(f"Bottom-left corner: ({x1}, {y1})")
-            
-            print("\nStep 2: Move mouse to top-right corner of food area")
-            print("You have 5 seconds to position your mouse...")
-            for i in range(5, 0, -1):
-                print(f"{i}...", end=" ", flush=True)
-                time.sleep(1)
-            print()
-            
-            x2, y2 = pyautogui.position()
-            print(f"Top-right corner: ({x2}, {y2})")
-            
-            # Ensure coordinates are in correct order
-            x1, x2 = min(x1, x2), max(x1, x2)
-            y1, y2 = min(y1, y2), max(y1, y2)
-            
-            food_area = (x1, y1, x2, y2)
-            print(f"\nFood area: {food_area}")
-            
-            # Save to config
-            save_choice = input("Save this food area? (y/n): ").strip().lower()
-            if save_choice == 'y':
-                config_path = "food_area_config.txt"
-                with open(config_path, 'w') as f:
-                    f.write(f"{x1},{y1},{x2},{y2}")
-                print(f"Food area saved to {config_path}")
-            
-            return food_area
-            
-        except Exception as e:
-            print(f"Error setting up food area: {e}")
-            return None
 
     def load_food_area(self) -> Optional[Tuple[int, int, int, int]]:
         """
-        Load saved food area from config file
+        Load saved food area from config manager
         """
-        config_path = "food_area_config.txt"
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    line = f.read().strip()
-                    x1, y1, x2, y2 = map(int, line.split(','))
-                    print(f"Loaded food area: ({x1}, {y1}, {x2}, {y2})")
-                    return (x1, y1, x2, y2)
-            except Exception as e:
-                print(f"Error loading food area: {e}")
+        food_area = self.config_manager.get_food_area_coordinates()
+        if food_area:
+            print(f"Loaded food area from config: {food_area}")
+            return food_area
         return None
-
-    def configure_loot_pickup(self) -> dict:
-        """
-        Interactive configuration for loot pickup settings
-        """
-        print("\n=== Loot Pickup Configuration ===")
-        print("Configure settings for automatic loot pickup after mob death")
-        
-        # Load existing config if available
-        loot_config = self.load_loot_config()
-        
-        # Loot color
-        print(f"\nCurrent loot color: #{loot_config.get('loot_color', 'AA00FFFF')}")
-        loot_color = input("Enter loot text color (hex, default: AA00FFFF): ").strip()
-        if not loot_color:
-            loot_color = "AA00FFFF"
-        
-        # Color tolerance
-        print(f"Current color tolerance: {loot_config.get('tolerance', 10)}")
-        tolerance_str = input("Enter color tolerance (default 10): ").strip()
-        if not tolerance_str:
-            tolerance = 10
-        else:
-            tolerance = int(tolerance_str)
-        
-        # Max distance
-        print(f"Current max distance: {loot_config.get('max_distance', 500)} pixels")
-        max_distance_str = input("Enter max distance from center (default 500): ").strip()
-        if not max_distance_str:
-            max_distance = 500
-        else:
-            max_distance = int(max_distance_str)
-        
-        # Enable/disable
-        print(f"Current status: {'Enabled' if loot_config.get('enabled', True) else 'Disabled'}")
-        enable_str = input("Enable loot pickup? (y/n, default: y): ").strip().lower()
-        if enable_str == 'n':
-            enabled = False
-        else:
-            enabled = True
-        
-        # Debug screenshots
-        print(f"Current debug screenshots: {'Enabled' if loot_config.get('save_debug', True) else 'Disabled'}")
-        debug_str = input("Save debug screenshots? (y/n, default: y): ").strip().lower()
-        if debug_str == 'n':
-            save_debug = False
-        else:
-            save_debug = True
-        
-        # Inventory area for burying items
-        inventory_area_display = loot_config.get('inventory_area', None)
-        if inventory_area_display is None:
-            inventory_area_display = "Not set"
-        print(f"\nCurrent inventory area: {inventory_area_display}")
-        setup_inventory = input("Set up inventory area for burying items? (y/n, default: n): ").strip().lower()
-        if setup_inventory == 'y':
-            print("\nMove mouse to top-left corner of inventory area")
-            print("You have 5 seconds to position your mouse...")
-            for i in range(5, 0, -1):
-                print(f"{i}...", end=" ", flush=True)
-                time.sleep(1)
-            print()
-            
-            inv_x1, inv_y1 = pyautogui.position()
-            print(f"Top-left corner: ({inv_x1}, {inv_y1})")
-            
-            print("\nMove mouse to bottom-right corner of inventory area")
-            print("You have 5 seconds to position your mouse...")
-            for i in range(5, 0, -1):
-                print(f"{i}...", end=" ", flush=True)
-                time.sleep(1)
-            print()
-            
-            inv_x2, inv_y2 = pyautogui.position()
-            print(f"Bottom-right corner: ({inv_x2}, {inv_y2})")
-            
-            # Ensure coordinates are in correct order
-            inv_x1, inv_x2 = min(inv_x1, inv_x2), max(inv_x1, inv_x2)
-            inv_y1, inv_y2 = min(inv_y1, inv_y2), max(inv_y1, inv_y2)
-            
-            inventory_area = (inv_x1, inv_y1, inv_x2, inv_y2)
-            print(f"Inventory area: {inventory_area}")
-        else:
-            inventory_area = loot_config.get('inventory_area', None)
-        
-        # Bury flag
-        print(f"\nCurrent bury setting: {'Enabled' if loot_config.get('bury', False) else 'Disabled'}")
-        bury_str = input("Enable burying items after pickup? (y/n, default: n): ").strip().lower()
-        if bury_str == 'y':
-            bury = True
-        else:
-            bury = False
-        
-        # Save configuration
-        config = {
-            'loot_color': loot_color,
-            'tolerance': tolerance,
-            'max_distance': max_distance,
-            'enabled': enabled,
-            'save_debug': save_debug,
-            'inventory_area': inventory_area,
-            'bury': bury
-        }
-        
-        save_choice = input("Save this configuration? (y/n): ").strip().lower()
-        if save_choice == 'y':
-            self.save_loot_config(config)
-            print("Loot configuration saved!")
-        
-        return config
-
-    def save_loot_config(self, config: dict):
-        """
-        Save loot configuration to file
-        """
-        config_path = "loot_config.txt"
-        try:
-            # Handle inventory area (always convert tuple to string)
-            inv_x1, inv_y1, inv_x2, inv_y2 = config.get('inventory_area', (0, 0, 0, 0))
-            inventory_area_str = f"{inv_x1},{inv_y1},{inv_x2},{inv_y2}"
-            
-            with open(config_path, 'w') as f:
-                f.write(f"{config['loot_color']},{config['tolerance']},{config['max_distance']},{config['enabled']},{config['save_debug']},{inventory_area_str},{config['bury']}")
-            print(f"Loot configuration saved to {config_path}")
-        except Exception as e:
-            print(f"Error saving loot configuration: {e}")
 
     def load_loot_config(self) -> dict:
         """
-        Load loot configuration from file
+        Load loot configuration from config manager
         """
-        config_path = "loot_config.txt"
-        default_config = {
-            'loot_color': 'AA00FFFF',
-            'tolerance': 10,
-            'max_distance': 500,
-            'enabled': True,
-            'save_debug': True,
-            'inventory_area': (0, 0, 0, 0),
-            'bury': False
-        }
-        
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    line = f.read().strip()
-                    parts = line.split(',')
-                    print(f"Parts: {parts}")
-                    if len(parts) >= 7:
-                        # New format with inventory area and bury
-                        inventory_area = (0, 0, 0, 0)  # Default
-                        inventory_area_idx = 5
-                        inv_x1 = int(parts[inventory_area_idx])
-                        inv_y1 = int(parts[inventory_area_idx + 1])
-                        inv_x2 = int(parts[inventory_area_idx + 2])
-                        inv_y2 = int(parts[inventory_area_idx + 3])
-                        inventory_area = (inv_x1, inv_y1, inv_x2, inv_y2)
-                        
-                        return {
-                            'loot_color': parts[0],
-                            'tolerance': int(parts[1]),
-                            'max_distance': int(parts[2]),
-                            'enabled': parts[3].lower() == 'true',
-                            'save_debug': parts[4].lower() == 'true',
-                            'inventory_area': inventory_area,
-                            'bury': parts[inventory_area_idx + 4].lower() == 'true'
-                        }
-
-            except Exception as e:
-                print(f"Error loading loot configuration: {e}")
-        
-        return default_config 
+        loot_config = self.config_manager.get_loot_pickup_config()
+        inventory_area = self.config_manager.get_inventory_area_coordinates()
+        return {
+            'loot_color': loot_config.get('loot_color', 'AA00FFFF'),
+            'tolerance': loot_config.get('tolerance', 10),
+            'max_distance': loot_config.get('max_distance', 500),
+            'enabled': loot_config.get('enabled', True),
+            'save_debug': loot_config.get('save_debug', True),
+            'inventory_area': inventory_area if inventory_area else (0, 0, 0, 0),
+            'bury': loot_config.get('bury', False)
+        } 
