@@ -4,11 +4,13 @@
 
 A Python-based RuneScape bot with human-like mouse movement based on my dear friend Jake
 
-Automatic attacking
-<img src="images/attack.gif" alt="attacking Jake" width="200"/>
+**Automatic attacking**
 
-Automatic loot pickup (and burying bones)
-<img src="images/pickup.gif" alt="pickup Jake" width="200"/>
+<img src="images/attack.gif" alt="attacking Jake" width="512"/>
+
+**Automatic loot pickup (and burying bones)**
+
+<img src="images/pickup.gif" alt="pickup Jake" width="512"/>
 
 ## Features
 
