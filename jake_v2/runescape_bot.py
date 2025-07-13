@@ -57,46 +57,132 @@ class RuneScapeBot:
                 print(f"Failed to initialize human path finder: {e}")
                 self.use_human_paths = False
     
-    def move_mouse_human_like(self, target_x: int, target_y: int, click_type: str = "left") -> bool:
+    def move_mouse_randomly(self, distance: int = 50, visualize: bool = False) -> bool:
         """
-        Move mouse to target using human-like paths if available, otherwise use standard movement
+        Move mouse to a random position using human-like movement if available
+        
+        Args:
+            distance: Distance in pixels to move from current position
+            visualize: Whether to visualize the path (default: False for random movements)
+            
+        Returns:
+            True if movement was successful, False otherwise
+        """
+        try:
+            # Get current mouse position
+            current_x, current_y = pyautogui.position()
+            
+            # Calculate random position at specified distance
+            angle = random.uniform(0, 2 * np.pi)  # Random angle
+            new_x = int(current_x + distance * np.cos(angle))
+            new_y = int(current_y + distance * np.sin(angle))
+            
+            # Ensure the new position is within screen bounds
+            screen_width = pyautogui.size().width
+            screen_height = pyautogui.size().height
+            new_x = max(0, min(new_x, screen_width - 1))
+            new_y = max(0, min(new_y, screen_height - 1))
+            
+            print(f"Random mouse movement: ({current_x}, {current_y}) -> ({new_x}, {new_y})")
+            
+            # Use human-like movement if available, otherwise fall back to standard movement
+            if self.use_human_paths and self.human_path:
+                # Use human path finder for random movement
+                current_pos = (current_x, current_y)
+                target_pos = (new_x, new_y)
+                
+                # Get human-like path for random movement
+                path = self.human_path.move_mouse_to_target(
+                    current_pos, target_pos, visualize=True
+                )
+                
+                # Execute the path
+                if path:
+                    self.human_path._execute_path(path)
+                    return True
+                else:
+                    # Fallback to standard movement if path generation fails
+                    pyautogui.moveTo(new_x, new_y, duration=random.uniform(0.1, 0.3))
+                    return True
+            else:
+                # Use standard mouse movement
+                pyautogui.moveTo(new_x, new_y, duration=random.uniform(0.1, 0.3))
+                return True
+                
+        except Exception as e:
+            print(f"Error during random mouse movement: {e}")
+            return False
+    
+    def move_mouse_human_like(self, target_x: int, target_y: int, click_type: str = "left", max_iterations: int = 5, tolerance: float = 10.0) -> bool:
+        """
+        Move mouse to target using iterative human-like paths with error checking
         
         Args:
             target_x: Target X coordinate
             target_y: Target Y coordinate
             click_type: Type of click to perform ("left", "right", "double")
+            max_iterations: Maximum number of movement iterations
+            tolerance: Distance tolerance in pixels (default: 10.0)
             
         Returns:
             True if movement and click successful, False otherwise
         """
         try:
             if self.use_human_paths and self.human_path:
-                # Use human path finder
+                # Iterative movement with error checking
                 current_pos = pyautogui.position()
                 target_pos = (target_x, target_y)
                 
-                # Get the human-like path
-                path = self.human_path.move_mouse_to_target(
-                    current_pos, target_pos, visualize=True
-                )
+                print(f"Starting iterative movement to ({target_x}, {target_y}) from ({current_pos[0]}, {current_pos[1]})")
                 
-                # Execute the path and click
-                if path:
-                    self.human_path._execute_path(path)
+                for iteration in range(max_iterations):
+                    # Calculate current distance to target
+                    current_x, current_y = pyautogui.position()
+                    distance_to_target = ((target_x - current_x) ** 2 + (target_y - current_y) ** 2) ** 0.5
                     
-                    # Perform the click
+                    print(f"Iteration {iteration + 1}: Distance to target = {distance_to_target:.1f} pixels")
+                    
+                    # Check if we're close enough to target
+                    if distance_to_target <= tolerance:
+                        print(f"Target reached! Final distance: {distance_to_target:.1f} pixels")
+                        break
+                    
+                    # Get the human-like path for current position to target
+                    current_pos = (current_x, current_y)
+                    path = self.human_path.move_mouse_to_target(
+                        current_pos, target_pos, visualize=True
+                    )
+                    
+                    # Execute the path
+                    if path:
+                        self.human_path._execute_path(path)
+                        
+                        # Small pause to let movement settle
+                        time.sleep(0.1)
+                    else:
+                        print(f"Iteration {iteration + 1}: Failed to generate path, falling back to standard movement")
+                        return self.mouse.click_at(target_x, target_y, click_type)
+                
+                # Final distance check
+                final_x, final_y = pyautogui.position()
+                final_distance = ((target_x - final_x) ** 2 + (target_y - final_y) ** 2) ** 0.5
+                
+                if final_distance <= tolerance:
+                    # Perform the click at the final position
                     if click_type == "left":
-                        pyautogui.click(target_x, target_y)
+                        pyautogui.click(final_x, final_y)
                     elif click_type == "right":
-                        pyautogui.rightClick(target_x, target_y)
+                        pyautogui.rightClick(final_x, final_y)
                     elif click_type == "double":
-                        pyautogui.doubleClick(target_x, target_y)
+                        pyautogui.doubleClick(final_x, final_y)
                     
-                    print(f"Human-like movement to ({target_x}, {target_y}) with {click_type} click")
+                    print(f"Successfully clicked at ({final_x}, {final_y}) with {click_type} click (final distance: {final_distance:.1f} pixels)")
                     return True
                 else:
-                    print("Failed to generate human-like path, falling back to standard movement")
+                    print(f"Failed to reach target within tolerance. Final distance: {final_distance:.1f} pixels")
+                    # Fallback to standard movement
                     return self.mouse.click_at(target_x, target_y, click_type)
+                    
             else:
                 # Use standard mouse movement
                 return self.mouse.click_at(target_x, target_y, click_type)
@@ -564,6 +650,10 @@ class RuneScapeBot:
                         return False
                     print("Successfully clicked in inventory area!")
                     
+                    # Random mouse movement after burying (human-like behavior)
+                    print("Moving mouse randomly after burying...")
+                    self.move_mouse_randomly(distance=100, visualize=False)
+                    
                     if save_debug:
                         # Save debug screenshot of inventory click
                         debug_filename = f"debug_screenshots/loot_bury_click_{loot_color}.png"
@@ -673,29 +763,9 @@ class RuneScapeBot:
         middle_left_y = screen_height // 2  # middle height
         
         while True:
-            # Random mouse movement during combat (1/4 chance each tick)
+            # Random mouse movement during combat (5% chance each tick)
             if random_mouse_movement and random.random() < 0.05:
-                try:
-                    # Get current mouse position
-                    current_x, current_y = pyautogui.position()
-                    
-                    # Calculate random position 300 pixels away
-                    angle = random.uniform(0, 2 * np.pi)  # Random angle
-                    distance = 300
-                    new_x = int(current_x + distance * np.cos(angle))
-                    new_y = int(current_y + distance * np.sin(angle))
-                    
-                    # Ensure the new position is within screen bounds
-                    screen_width = pyautogui.size().width
-                    screen_height = pyautogui.size().height
-                    new_x = max(0, min(new_x, screen_width - 1))
-                    new_y = max(0, min(new_y, screen_height - 1))
-                    
-                    print(f"Random mouse movement: ({current_x}, {current_y}) -> ({new_x}, {new_y})")
-                    pyautogui.moveTo(new_x, new_y, duration=random.uniform(0.1, 0.3))
-                    
-                except Exception as e:
-                    print(f"Error during random mouse movement: {e}")
+                self.move_mouse_randomly(distance=50, visualize=False)
             
             # Check for mob death first
             death_detected = self.check_combat_status_by_color(health_x, health_y, mode="death", tolerance=30)
