@@ -1,5 +1,14 @@
-food_area_config.txt
-health_bar_config.txt
 *.png
 __pycache__/
 *.npy
+*.egg-info/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
+*.pyzwz
+*.pyzwzw
+.vscode/
