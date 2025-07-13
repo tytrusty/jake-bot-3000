@@ -14,7 +14,7 @@ A Python-based RuneScape bot with human-like mouse movement based on my dear fri
 ## Dependencies
 
 - Python 3.9+
-- NumPy, SciPy, scikit-learn (machine learning)
+- NumPy, SciPy, scikit-learn
 - OpenCV, Pillow (image processing)
 - PyAutoGUI, PyDirectInput (automation)
 - pywin32 (Windows integration)
@@ -23,8 +23,8 @@ A Python-based RuneScape bot with human-like mouse movement based on my dear fri
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/tytrusty/rs-bot.git
-cd runescape-pro
+git clone https://github.com/tytrusty/jake-bot-3000.git
+cd jake-bot-3000
 ```
 
 2. Create and activate the conda environment:

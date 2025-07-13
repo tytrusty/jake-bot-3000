@@ -31,7 +31,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["jake_v2*"]
+include = ["jake*"]
 
 [tool.setuptools.package-data]
-jake_v2 = ["*.npy", "*.txt", "templates/*"] 
+jake = ["*.npy", "*.txt", "templates/*"] 
