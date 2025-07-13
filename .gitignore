@@ -1,6 +1,4 @@
-*.png
 __pycache__/
-*.npy
 *.egg-info/
 *.pyc
 *.pyo
@@ -12,3 +10,4 @@ __pycache__/
 *.pyzwz
 *.pyzwzw
 .vscode/
+debug_screenshots/
