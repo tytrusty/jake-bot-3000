@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+runescape_pro.egg-info/PKG-INFO
+runescape_pro.egg-info/SOURCES.txt
+runescape_pro.egg-info/dependency_links.txt
+runescape_pro.egg-info/requires.txt
+runescape_pro.egg-info/top_level.txt
