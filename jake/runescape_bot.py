@@ -27,14 +27,9 @@ class RuneScapeBot:
         self.running = False
         self.window_title = "RuneLite"
         self.window_region: Optional[Tuple[int, int, int, int]] = None
-        self.templates_dir = "templates"
         self.in_combat = False  # Combat status flag
         self.use_human_paths = use_human_paths
         self.config_manager = config_manager
-        
-        # Create templates directory if it doesn't exist
-        if not os.path.exists(self.templates_dir):
-            os.makedirs(self.templates_dir)
         
         # Initialize PyDirectInput for better game compatibility
         pydirectinput.FAILSAFE = False
@@ -103,69 +98,22 @@ class RuneScapeBot:
             print(f"Error during random mouse movement: {e}")
             return False
     
-    def move_mouse_human_like(self, target_x: int, target_y: int, click_type: str = "left", max_iterations: int = 5, tolerance: float = 10.0) -> bool:
+    def move_mouse_human_like(self, target_x: int, target_y: int, click_type: str = "left") -> bool:
         """
-        Move mouse to target using iterative human-like paths with error checking
+        Move mouse to target using human-like paths and perform a click
         
         Args:
             target_x: Target X coordinate
             target_y: Target Y coordinate
             click_type: Type of click to perform ("left", "right", "double")
-            max_iterations: Maximum number of movement iterations
-            tolerance: Distance tolerance in pixels (default: 10.0)
             
         Returns:
             True if movement and click successful, False otherwise
         """
         try:
             if self.use_human_paths and self.human_path:
-                # Iterative movement with error checking
-                current_pos = pyautogui.position()
-                target_pos = (target_x, target_y)
-                
-                print(f"Starting iterative movement to ({target_x}, {target_y}) from ({current_pos[0]}, {current_pos[1]})")
-                
-                for iteration in range(max_iterations):
-                    # Calculate current distance to target
-                    current_x, current_y = pyautogui.position()
-                    distance_to_target = ((target_x - current_x) ** 2 + (target_y - current_y) ** 2) ** 0.5
-                    
-                    print(f"Iteration {iteration + 1}: Distance to target = {distance_to_target:.1f} pixels")
-                    
-                    # Check if we're close enough to target
-                    if distance_to_target <= tolerance:
-                        print(f"Target reached! Final distance: {distance_to_target:.1f} pixels")
-                        break
-                    
-                    # Use human path finder for movement
-                    success = self.human_path.move_mouse(target_x, target_y)
-                    
-                    if success:
-                        # Small pause to let movement settle
-                        time.sleep(0.1)
-                    else:
-                        print(f"Iteration {iteration + 1}: Failed to generate path, falling back to standard movement")
-                        return self.mouse.click_at(target_x, target_y, click_type)
-                
-                # Final distance check
-                final_x, final_y = pyautogui.position()
-                final_distance = ((target_x - final_x) ** 2 + (target_y - final_y) ** 2) ** 0.5
-                
-                if final_distance <= tolerance:
-                    # Use human path finder for the click
-                    success = self.human_path.move_mouse_and_click(target_x, target_y, click_type)
-                    if success:
-                        print(f"Successfully clicked at ({target_x}, {target_y}) with {click_type} click (final distance: {final_distance:.1f} pixels)")
-                        return True
-                    else:
-                        print(f"Failed to click at target. Final distance: {final_distance:.1f} pixels")
-                        # Fallback to standard movement
-                        return self.mouse.click_at(target_x, target_y, click_type)
-                else:
-                    print(f"Failed to reach target within tolerance. Final distance: {final_distance:.1f} pixels")
-                    # Fallback to standard movement
-                    return self.mouse.click_at(target_x, target_y, click_type)
-                    
+                # Use human path finder for movement and clicking
+                return self.human_path.move_mouse_and_click(target_x, target_y, click_type)
             else:
                 # Use standard mouse movement
                 return self.mouse.click_at(target_x, target_y, click_type)
@@ -632,6 +580,10 @@ class RuneScapeBot:
                         print("Failed to click in inventory area")
                         return False
                     print("Successfully clicked in inventory area!")
+                    
+                    # Wait a bit after burying before random mouse movement
+                    print("Waiting 0.25 seconds after burying...")
+                    time.sleep(0.5)
                     
                     # Random mouse movement after burying (human-like behavior)
                     print("Moving mouse randomly after burying...")
