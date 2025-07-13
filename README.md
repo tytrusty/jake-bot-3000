@@ -1,8 +1,14 @@
 # JAKE BOT 2000
 
-<img src="robo-jake.png" alt="Robo Jake" width="200"/>
+<img src="images/robo-jake.png" alt="Robo Jake" width="200"/>
 
 A Python-based RuneScape bot with human-like mouse movement based on my dear friend Jake
+
+Automatic attacking
+<img src="images/attack.gif" alt="attacking Jake" width="200"/>
+
+Automatic loot pickup (and burying bones)
+<img src="images/pickup.gif" alt="pickup Jake" width="200"/>
 
 ## Features
 
