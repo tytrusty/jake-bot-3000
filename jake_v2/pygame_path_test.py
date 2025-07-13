@@ -1,7 +1,7 @@
 import pygame
 import sys
 import numpy as np
-from human_path_finder import HumanPath
+from path.human_path_finder import HumanPath
 import random
 import pyautogui
 
@@ -63,7 +63,12 @@ class PygamePathTest:
     def init_human_path(self):
         """Initialize the HumanPath finder."""
         try:
-            self.human_path = HumanPath()
+            self.human_path = HumanPath('path/mouse_paths_augmented.npy',
+                                        use_iterative_movement=True,
+                                        use_random_selection=True,
+                                        k=8,
+                                        max_iterations=5,
+                                        tolerance=10.0)
             print("HumanPath initialized successfully")
         except Exception as e:
             print(f"Failed to initialize HumanPath: {e}")
@@ -152,11 +157,11 @@ class PygamePathTest:
         self.screen.blit(text_surface, (10, self.height - 60))
         
         # Get path info
-        if self.human_path:
-            path_info = self.human_path.get_path_info((dx, dy))
-            path_text = f"Path {path_info['path_index']} (dist: {path_info['distance']:.1f})"
-            text_surface = self.small_font.render(path_text, True, self.WHITE)
-            self.screen.blit(text_surface, (10, self.height - 40))
+        # if self.human_path:
+        #     path_info = self.human_path.get_path_info((dx, dy), use_random_selection=True, k=8)
+        #     path_text = f"Path {path_info['path_index']} (dist: {path_info['distance']:.1f})"
+        #     text_surface = self.small_font.render(path_text, True, self.WHITE)
+        #     self.screen.blit(text_surface, (10, self.height - 40))
     
     def move_to_target(self, target_pos):
         """Move mouse to target using human-like path."""
@@ -168,9 +173,7 @@ class PygamePathTest:
         current_pos = pygame.mouse.get_pos()
         
         # Get the path for this movement
-        path = self.human_path.move_mouse_to_target(
-            current_pos, target_pos, visualize=True
-        )
+        path = self.human_path.move_mouse_to_target(current_pos, target_pos, visualize=True)
         
         # Store the path for visualization
         self.paths.append({
@@ -198,10 +201,10 @@ class PygamePathTest:
             print(f"Path length: {len(screen_path)}")
             
             # Execute the path with screen coordinates
-            self.human_path._execute_path(screen_path, (screen_start_x, screen_start_y))
+            # self.human_path._execute_path(screen_path)
         else:
             # Fallback if window position not available
-            self.human_path._execute_path(path, current_pos)
+            self.human_path._execute_path(path)
     
     def get_random_color(self):
         """Get a random color for path visualization."""

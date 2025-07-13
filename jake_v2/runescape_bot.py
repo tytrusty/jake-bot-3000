@@ -91,14 +91,9 @@ class RuneScapeBot:
                 current_pos = (current_x, current_y)
                 target_pos = (new_x, new_y)
                 
-                # Get human-like path for random movement
-                path = self.human_path.move_mouse_to_target(
-                    current_pos, target_pos, visualize=True
-                )
-                
-                # Execute the path
-                if path:
-                    self.human_path._execute_path(path)
+                # Use human path finder for random movement
+                success = self.human_path.move_mouse(new_x, new_y)
+                if success:
                     return True
                 else:
                     # Fallback to standard movement if path generation fails
@@ -147,16 +142,10 @@ class RuneScapeBot:
                         print(f"Target reached! Final distance: {distance_to_target:.1f} pixels")
                         break
                     
-                    # Get the human-like path for current position to target
-                    current_pos = (current_x, current_y)
-                    path = self.human_path.move_mouse_to_target(
-                        current_pos, target_pos, visualize=True
-                    )
+                    # Use human path finder for movement
+                    success = self.human_path.move_mouse(target_x, target_y)
                     
-                    # Execute the path
-                    if path:
-                        self.human_path._execute_path(path)
-                        
+                    if success:
                         # Small pause to let movement settle
                         time.sleep(0.1)
                     else:
@@ -168,16 +157,15 @@ class RuneScapeBot:
                 final_distance = ((target_x - final_x) ** 2 + (target_y - final_y) ** 2) ** 0.5
                 
                 if final_distance <= tolerance:
-                    # Perform the click at the final position
-                    if click_type == "left":
-                        pyautogui.click(final_x, final_y)
-                    elif click_type == "right":
-                        pyautogui.rightClick(final_x, final_y)
-                    elif click_type == "double":
-                        pyautogui.doubleClick(final_x, final_y)
-                    
-                    print(f"Successfully clicked at ({final_x}, {final_y}) with {click_type} click (final distance: {final_distance:.1f} pixels)")
-                    return True
+                    # Use human path finder for the click
+                    success = self.human_path.move_mouse_and_click(target_x, target_y, click_type)
+                    if success:
+                        print(f"Successfully clicked at ({target_x}, {target_y}) with {click_type} click (final distance: {final_distance:.1f} pixels)")
+                        return True
+                    else:
+                        print(f"Failed to click at target. Final distance: {final_distance:.1f} pixels")
+                        # Fallback to standard movement
+                        return self.mouse.click_at(target_x, target_y, click_type)
                 else:
                     print(f"Failed to reach target within tolerance. Final distance: {final_distance:.1f} pixels")
                     # Fallback to standard movement
@@ -1183,11 +1171,49 @@ class RuneScapeBot:
 def main():
     # Check if user wants to use human-like paths
     use_human_paths = False
+    speed_range = (0.5, 2.0)  # Default speed range
+    
     if HUMAN_PATH_AVAILABLE:
         human_path_choice = input("Use human-like mouse movement? (y/n, default: n): ").strip().lower()
         use_human_paths = human_path_choice == 'y'
+        
+        if use_human_paths:
+            # Configure speed range
+            print("\nSpeed range configuration:")
+            print("This controls how fast the mouse moves (multiplier of base speed)")
+            print(f"Current default: {speed_range[0]:.1f}x to {speed_range[1]:.1f}x")
+            
+            configure_speed = input("Configure speed range? (y/n, default: n): ").strip().lower()
+            if configure_speed == 'y':
+                print("\nSpeed range options:")
+                print("1. Slow (0.2x to 0.5x) - Very slow, careful movements")
+                print("2. Normal (0.5x to 2.0x) - Default human-like variation")
+                print("3. Fast (1.5x to 3.0x) - Quick movements")
+                print("4. Custom - Specify your own range")
+                
+                speed_choice = input("Choose speed option (1-4, default: 2): ").strip()
+                if speed_choice == "1":
+                    speed_range = (0.2, 0.5)
+                elif speed_choice == "3":
+                    speed_range = (1.5, 3.0)
+                elif speed_choice == "4":
+                    try:
+                        min_speed = float(input("Enter minimum speed multiplier (e.g., 0.5): ").strip())
+                        max_speed = float(input("Enter maximum speed multiplier (e.g., 2.0): ").strip())
+                        speed_range = (min_speed, max_speed)
+                    except ValueError:
+                        print("Invalid input, using default speed range")
+                        speed_range = (0.5, 2.0)
+                else:
+                    speed_range = (0.5, 2.0)  # Default
+                
+                print(f"Speed range set to: {speed_range[0]:.1f}x to {speed_range[1]:.1f}x")
     
     bot = RuneScapeBot(use_human_paths=use_human_paths)
+    
+    # Update speed range if human paths are enabled
+    if use_human_paths and bot.human_path:
+        bot.human_path.speed_range = speed_range
     
     print("RuneScape Bot")
     print("1. Attack Bot (Find pixels by color)")
