@@ -415,8 +415,12 @@ class RuneScapeBot:
             screen_x = window_x + pixel_x
             screen_y = window_y + pixel_y
             
-            # Right-click on the loot
-            print(f"Right-clicking on loot at pixel ({pixel_x}, {pixel_y}) -> screen ({screen_x}, {screen_y})")
+            # Add offset to right-click position (move down a bit because the loot is below the text)
+            right_click_offset = 10  # 10 pixels down
+            screen_y += right_click_offset
+            
+            # Right-click on the loot with offset
+            print(f"Right-clicking on loot at pixel ({pixel_x}, {pixel_y}) -> screen ({screen_x}, {screen_y}) (with {right_click_offset}px offset)")
             
             try:
                 success = self.move_mouse_human_like(screen_x, screen_y, "right")
