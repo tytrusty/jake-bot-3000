@@ -697,7 +697,16 @@ class RuneScapeBot:
         middle_left_x = screen_width // 4  # 25% from left
         middle_left_y = screen_height // 2  # middle height
         
+        # Add timeout mechanism - give up after 60 seconds
+        start_time = time.time()
+        timeout_duration = 60  # 60 seconds = 1 minute
+        
         while True:
+            # Check for timeout
+            elapsed_time = time.time() - start_time
+            if elapsed_time > timeout_duration:
+                print(f"Timeout reached ({timeout_duration} seconds). Giving up on current mob and restarting attack sequence.")
+                return False  # Signal to restart attack sequence
             # Random mouse movement during combat (5% chance each tick)
             if random_mouse_movement and random.random() < 0.05:
                 self.move_mouse_randomly(distance=50, visualize=False)

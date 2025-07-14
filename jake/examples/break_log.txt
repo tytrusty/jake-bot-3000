@@ -9,3 +9,17 @@
 2025-07-13 05:35:28 - Break finished: 5.8 minute break completed
 2025-07-13 14:17:13 - Break started: 5.3 minute break after 31.1 minutes of activity
 2025-07-13 14:22:32 - Break finished: 5.3 minute break completed
+2025-07-13 14:58:24 - Break started: 3.2 minute break after 31.7 minutes of activity
+2025-07-13 15:01:36 - Break finished: 3.2 minute break completed
+2025-07-13 16:43:49 - Break started: 5.3 minute break after 31.4 minutes of activity
+2025-07-13 16:49:06 - Break finished: 5.3 minute break completed
+2025-07-13 17:18:25 - Break started: 2.7 minute break after 29.3 minutes of activity
+2025-07-13 17:21:07 - Break finished: 2.7 minute break completed
+2025-07-13 17:50:19 - Break started: 3.5 minute break after 29.2 minutes of activity
+2025-07-13 17:53:52 - Break finished: 3.5 minute break completed
+2025-07-13 18:23:15 - Break started: 5.0 minute break after 29.4 minutes of activity
+2025-07-13 18:28:13 - Break finished: 5.0 minute break completed
+2025-07-13 18:57:30 - Break started: 5.5 minute break after 29.3 minutes of activity
+2025-07-13 19:03:02 - Break finished: 5.5 minute break completed
+2025-07-13 19:32:18 - Break started: 5.1 minute break after 29.3 minutes of activity
+2025-07-13 19:37:23 - Break finished: 5.1 minute break completed

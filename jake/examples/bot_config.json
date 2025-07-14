@@ -21,10 +21,10 @@
   "food_area": {
     "enabled": true,
     "coordinates": [
-      1379,
-      1007,
-      1604,
-      1071
+      1373,
+      997,
+      1603,
+      1258
     ],
     "red_threshold": 5
   },
@@ -50,7 +50,7 @@
     "break_interval_min": 29,
     "break_interval_max": 33,
     "break_duration_min": 2,
-    "break_duration_max": 5
+    "break_duration_max": 6
   },
   "debug": {
     "save_screenshots": true,
