@@ -11,9 +11,8 @@ import random
 import pyautogui
 import jake.screenshot_utils
 import jake.color_utils
-import jake.mouse_movement
+import jake
 from typing import Optional, Tuple
-from jake.path.human_path_finder import HumanPath
 
 class PixelClicker:
     """Handles clicking on pixels with specific colors, including verification."""
@@ -30,13 +29,13 @@ class PixelClicker:
         self.use_human_paths = use_human_paths
         
         # Initialize both mouse movement systems
-        self.bezier_mouse = jake.mouse_movement.BezierMouseMovement()
+        self.bezier_mouse = jake.path.BezierMouseMovement()
         
         # Initialize human path finder if requested
         self.human_mouse = None
         if self.use_human_paths:
             try:
-                self.human_mouse = HumanPath()
+                self.human_mouse = jake.path.HumanPath()
                 print("Human path finder initialized successfully")
             except Exception as e:
                 print(f"Failed to initialize human path finder: {e}")

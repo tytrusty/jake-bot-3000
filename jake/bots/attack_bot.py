@@ -8,21 +8,21 @@ import threading
 import random
 import os
 from typing import Tuple, Optional, List
-from mouse_movement import MouseMovement
-import screenshot_utils
-import color_utils
-import pixel_selection
+from jake.path.bezier_mouse_movement import BezierMouseMovement
+import jake.screenshot_utils
+import jake.color_utils
+import jake.pixel_selection
 from scipy.ndimage import label, binary_dilation
 import math
 from sklearn.cluster import DBSCAN
-from path.human_path_finder import HumanPath
-from config_manager import ConfigurationManager
+from jake.path.human_path_finder import HumanPath
+from jake.config_manager import ConfigurationManager
 
 # Configure PyAutoGUI for safety
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.1
 
-class RuneScapeBot:
+class AttackBot:
     def __init__(self, config_manager: ConfigurationManager, use_human_paths: bool = False):
         self.running = False
         self.window_title = "RuneLite"
@@ -35,7 +35,7 @@ class RuneScapeBot:
         pydirectinput.FAILSAFE = False
         
         # Initialize mouse movement controller with speed range for more human-like variability
-        self.mouse = MouseMovement(speed_factor=(2.0, 5.0), jitter_factor=0.3)
+        self.mouse = BezierMouseMovement(speed_factor=(2.0, 5.0), jitter_factor=0.3)
         
         # Initialize human path finder if requested and available
         self.human_path = None
@@ -198,14 +198,14 @@ class RuneScapeBot:
                 return False
         
         # Capture screenshot of the RuneScape window
-        screenshot = screenshot_utils.capture_screen_region(self.window_region)
+        screenshot = jake.screenshot_utils.capture_screen_region(self.window_region)
         
         # Use the new pixel selection logic with downsampling for high-resolution screens
         downsample_factor = 4  # Can be made configurable
         if method == "smart":
-            selected_pixel = pixel_selection.smart_pixel_select(screenshot, hex_color, tolerance, return_debug=False, downsample_factor=downsample_factor)
+            selected_pixel = jake.pixel_selection.smart_pixel_select(screenshot, hex_color, tolerance, return_debug=False, downsample_factor=downsample_factor)
         else:
-            selected_pixel = pixel_selection.random_pixel_select(screenshot, hex_color, tolerance)
+            selected_pixel = jake.pixel_selection.random_pixel_select(screenshot, hex_color, tolerance)
         
         if selected_pixel is None:
             print(f"No pixels found with color {hex_color} using method '{method}'")
@@ -253,7 +253,7 @@ class RuneScapeBot:
                     return False
             
             # Capture screenshot of the RuneScape window
-            screenshot = screenshot_utils.capture_screen_region(self.window_region)
+            screenshot = jake.screenshot_utils.capture_screen_region(self.window_region)
             
             # Calculate screen center relative to the window
             window_width = self.window_region[2]
@@ -264,7 +264,7 @@ class RuneScapeBot:
             print(f"Searching for loot with color #{loot_color} within {max_distance} pixels of center ({center_x}, {center_y})")
             
             # Find all pixels with the loot color
-            loot_pixels = color_utils.find_pixels_by_color(screenshot, loot_color, tolerance)
+            loot_pixels = jake.color_utils.find_pixels_by_color(screenshot, loot_color, tolerance)
             
             if not loot_pixels:
                 print(f"No loot pixels found with color #{loot_color}")
@@ -446,10 +446,10 @@ class RuneScapeBot:
                 
                 # Capture screenshot of the menu area
                 menu_region = (menu_start_x, menu_start_y, menu_width, menu_height)
-                menu_screenshot = screenshot_utils.capture_screen_region(menu_region)
+                menu_screenshot = jake.screenshot_utils.capture_screen_region(menu_region)
                 
                 # Find loot color pixels in the menu area
-                menu_loot_pixels = color_utils.find_pixels_by_color(menu_screenshot, loot_color, tolerance)
+                menu_loot_pixels = jake.color_utils.find_pixels_by_color(menu_screenshot, loot_color, tolerance)
                 
                 if not menu_loot_pixels:
                     print("No loot color found in menu box")
@@ -599,7 +599,7 @@ class RuneScapeBot:
                         
                         # Capture screenshot of inventory area
                         inv_region = (inv_x1, inv_y1, inv_x2 - inv_x1, inv_y2 - inv_y1)
-                        inv_screenshot = screenshot_utils.capture_screen_region(inv_region)
+                        inv_screenshot = jake.screenshot_utils.capture_screen_region(inv_region)
                         
                         # Draw click point
                         click_x = random_inv_x - inv_x1
@@ -760,13 +760,13 @@ class RuneScapeBot:
             # Check health if food area is configured
             if food_area is not None:
                 # Sample both points for red color
-                left_color = screenshot_utils.get_pixel_color_at_position(middle_left_x, middle_left_y)
+                left_color = jake.screenshot_utils.get_pixel_color_at_position(middle_left_x, middle_left_y)
                 
                 # Define pure red color (255, 0, 0)
                 pure_red = (255, 0, 0)
                 
                 # Calculate color distance to pure red for both points
-                left_distance = color_utils.calculate_color_distance(left_color, pure_red)
+                left_distance = jake.color_utils.calculate_color_distance(left_color, pure_red)
                 
                 # Check if BOTH points are close to pure red (small distance = closer to red)
                 if left_distance <= red_threshold:
@@ -806,15 +806,15 @@ class RuneScapeBot:
         """
         try:
             # Get the color at the specified position
-            pixel_color = screenshot_utils.get_pixel_color_at_position(x, y)
-            pixel_hex = color_utils.rgb_to_hex(pixel_color)
+            pixel_color = jake.screenshot_utils.get_pixel_color_at_position(x, y)
+            pixel_hex = jake.color_utils.rgb_to_hex(pixel_color)
             
             # print(f"Health bar pixel ({x}, {y}) color: RGB{pixel_color} = #{pixel_hex}")
             
             if mode == "combat":
                 # Check for green combat color (#048834)
                 target_color = "048834"
-                if color_utils.colors_match(pixel_hex, target_color, tolerance):
+                if jake.color_utils.colors_match(pixel_hex, target_color, tolerance):
                     self.in_combat = True
                     print(f"Combat detected (green #{target_color})")
                     return True
@@ -826,7 +826,7 @@ class RuneScapeBot:
             elif mode == "death":
                 # Check for red death color (#601211)
                 target_color = "601211"
-                if color_utils.colors_match(pixel_hex, target_color, tolerance):
+                if jake.color_utils.colors_match(pixel_hex, target_color, tolerance):
                     self.in_combat = False
                     print(f"Death detected (red #{target_color})")
                     return True

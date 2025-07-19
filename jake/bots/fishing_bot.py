@@ -17,7 +17,7 @@ import numpy as np
 import jake.screenshot_utils
 import jake.color_utils
 import jake.pixel_selection
-import jake.mouse_movement
+import jake.path
 from jake.config_manager import ConfigurationManager
 from typing import Optional, Tuple, List
 
@@ -430,7 +430,7 @@ class FishingBot:
             try:
                 if self.human_movement.get("enabled", False):
                     # Use human-like movement
-                    mouse_mover = jake.mouse_movement.MouseMovement()
+                    mouse_mover = jake.path.BezierMouseMovement()
                     mouse_mover.move_mouse_to(random_x, random_y)
                 else:
                     # Direct movement

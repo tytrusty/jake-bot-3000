@@ -8,7 +8,7 @@ buying iron ore from a vendor and depositing it in a bank.
 
 import sys
 import os
-from jake.buy_iron_script import BuyIronBot
+import jake
 
 def main():
     """Run the buy iron bot example"""
@@ -31,7 +31,7 @@ def main():
     
     try:
         # Initialize the bot
-        bot = BuyIronBot(config_file)
+        bot = jake.BuyIronBot(config_file)
         
         # Run the bot (you can specify max_cycles to limit the number of cycles)
         # For example: bot.run(max_cycles=5) to run only 5 cycles

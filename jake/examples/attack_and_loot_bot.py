@@ -18,12 +18,12 @@ import argparse
 # Add the parent directory to the Python path to import the bot modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from runescape_bot import RuneScapeBot
-from config_manager import ConfigurationManager
-import screenshot_utils
-import color_utils
+from jake.bots.attack_bot import AttackBot
+from jake.config_manager import ConfigurationManager
+import jake.screenshot_utils
+import jake.color_utils
 import pixel_selection
-from path.human_path_finder import HumanPath
+from jake.path import HumanPath
 
 def main():
     """Main function for the RuneScape bot example."""
@@ -45,7 +45,7 @@ def main():
     
     # Initialize bot with configuration
     use_human_paths = config_manager.is_human_movement_enabled()
-    bot = RuneScapeBot(config_manager=config_manager, use_human_paths=use_human_paths)
+    bot = AttackBot(config_manager=config_manager, use_human_paths=use_human_paths)
     
     # Update human path settings if enabled
     if use_human_paths and bot.human_path:
@@ -247,8 +247,8 @@ def main():
                 filename = input("Enter filename (or press Enter for auto): ").strip()
                 if not filename:
                     filename = None
-                left_half_region = screenshot_utils.get_left_half_region()
-                screenshot_utils.save_screenshot(filename, left_half_region)
+                left_half_region = jake.screenshot_utils.get_left_half_region()
+                jake.screenshot_utils.save_screenshot(filename, left_half_region)
                 
             elif debug_choice == "2":
                 hex_color = input("Enter hex color to find (e.g., 00FFFFFA): ").strip()
@@ -274,15 +274,15 @@ def main():
                 window_region = bot.find_runescape_window()
                 if not window_region:
                     print("Could not find RuneScape window. Using left half of screen instead.")
-                    screenshot = screenshot_utils.capture_left_half_screen()
+                    screenshot = jake.screenshot_utils.capture_left_half_screen()
                 else:
                     print(f"Using RuneScape window region: {window_region}")
-                    screenshot = screenshot_utils.capture_screen_region(window_region)
+                    screenshot = jake.screenshot_utils.capture_screen_region(window_region)
                 
                 print(f"Finding pixels with color {hex_color} and tolerance {tolerance} using method '{debug_method}'...")
                 
                 if debug_method == "random":
-                    pixels = color_utils.find_pixels_by_color(screenshot, hex_color, tolerance)
+                    pixels = jake.color_utils.find_pixels_by_color(screenshot, hex_color, tolerance)
                 else:
                     # Use smart selection to get filtered pixels and debug info
                     downsample_factor = 4  # Can be made configurable
@@ -306,7 +306,7 @@ def main():
                             pixels = []
                     else:
                         # Fallback to random selection if smart selection failed
-                        pixels = color_utils.find_pixels_by_color(screenshot, hex_color, tolerance)
+                        pixels = jake.color_utils.find_pixels_by_color(screenshot, hex_color, tolerance)
                 
                 if pixels:
                     print(f"Found {len(pixels)} pixels! Check debug_screenshots/ folder for highlighted image.")
