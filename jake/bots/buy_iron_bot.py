@@ -69,20 +69,16 @@ class BuyIronBot:
             self._validate_configuration()
             
             # Mouse movement and pixel clicking
-            self.mouse = jake.pixel_clicker.PixelClicker(self.window_region, use_human_paths=True)
+            self.mouse = jake.pixel_clicker.PixelClicker(
+                self.window_region, 
+                use_human_paths=self.human_movement.get("enabled", False),
+                config_manager=self.config_manager
+            )
             
             self.initialized = True
             
             print("Buy Iron Bot initialized successfully")
-            print(f"Ladder color: #{self.ladder_color}")
-            print(f"Wait time: {self.wait_time}s")
-            print(f"Vendor color: #{self.vendor_color}")
-            print(f"Vendor region box: {self.vendor_region_box}")
-            print(f"Buy box: {self.buy_box}")
-            print(f"Bank color: #{self.bank_color}")
-            print(f"Inventory deposit box: {self.inventory_deposit_box}")
-            print(f"Color tolerance: {self.color_tolerance}")
-            print(f"Debug mode: {'Enabled' if self.debug_enabled else 'Disabled'}")
+            self.print_config_summary()
             
         except Exception as e:
             print(f"Failed to initialize Buy Iron Bot: {e}")
@@ -113,6 +109,26 @@ class BuyIronBot:
             raise ValueError("Ladder color is required but not configured")
         
         print("Configuration validation passed")
+
+    def print_config_summary(self):
+        """
+        Print a summary of the bot's configuration settings.
+        """
+        print("\n=== Buy Iron Bot Configuration Summary ===")
+        print(f"Ladder color: #{self.ladder_color}")
+        print(f"Wait time: {self.wait_time}s")
+        print(f"Vendor color: #{self.vendor_color}")
+        print(f"Vendor region box: {self.vendor_region_box}")
+        print(f"Buy box: {self.buy_box}")
+        print(f"Bank color: #{self.bank_color}")
+        print(f"Inventory deposit box: {self.inventory_deposit_box}")
+        print(f"Color tolerance: {self.color_tolerance}")
+        print(f"Vendor click wait: {self.vendor_click_wait}s")
+        print(f"Verify clicks: {'Yes' if self.verify_clicks else 'No'}")
+        print(f"Ladder time: {self.ladder_time}s")
+        print(f"Human-like movement: {'Enabled' if self.human_movement.get('enabled', False) else 'Disabled'}")
+        print(f"Debug mode: {'Enabled' if self.debug_enabled else 'Disabled'}")
+        print()
 
     def wait(self, seconds: float, random_addition: float = 5.0) -> None:
         """

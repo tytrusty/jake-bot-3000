@@ -1,22 +1,19 @@
 import cv2
 import numpy as np
 import pyautogui
-import pydirectinput
 import time
-import keyboard
-import threading
 import random
 import os
 from typing import Tuple, Optional, List
-from jake.path.bezier_mouse_movement import BezierMouseMovement
 import jake.screenshot_utils
 import jake.color_utils
 import jake.pixel_selection
 from scipy.ndimage import label, binary_dilation
 import math
 from sklearn.cluster import DBSCAN
-from jake.path.human_path_finder import HumanPath
 from jake.config_manager import ConfigurationManager
+import jake.pixel_clicker
+import keyboard  
 
 # Configure PyAutoGUI for safety
 pyautogui.FAILSAFE = True
@@ -26,160 +23,125 @@ class AttackBot:
     def __init__(self, config_manager: ConfigurationManager, use_human_paths: bool = False):
         self.running = False
         self.window_title = "RuneLite"
-        self.window_region: Optional[Tuple[int, int, int, int]] = None
         self.in_combat = False  # Combat status flag
         self.use_human_paths = use_human_paths
         self.config_manager = config_manager
+        self.initialized = False
         
-        # Initialize PyDirectInput for better game compatibility
-        pydirectinput.FAILSAFE = False
+        # Validate configuration and load all settings
+        self._validate_and_load_configuration()
         
-        # Initialize mouse movement controller with speed range for more human-like variability
-        self.mouse = BezierMouseMovement(speed_factor=(2.0, 5.0), jitter_factor=0.3)
+        # Find RuneScape window and initialize mouse
+        self.window_region = jake.screenshot_utils.find_runescape_window(self.window_title)
         
-        # Initialize human path finder if requested and available
-        self.human_path = None
-        if self.use_human_paths:
-            try:
-                self.human_path = HumanPath()
-                print("Human path finder initialized successfully")
-            except Exception as e:
-                print(f"Failed to initialize human path finder: {e}")
-                self.use_human_paths = False
+        # Initialize mouse for all mouse interactions
+        self.mouse = jake.pixel_clicker.PixelClicker(
+            self.window_region, 
+            use_human_paths=use_human_paths, 
+            config_manager=config_manager if use_human_paths else None
+        )
+        
+        self.initialized = True
+        print(f"Attack bot initialized with window region: {self.window_region}")
+        self.print_config_summary()
     
-    def move_mouse_randomly(self, distance: int = 50, visualize: bool = False) -> bool:
+    def _validate_and_load_configuration(self):
         """
-        Move mouse to a random position using human-like movement if available
+        Validate that all required configuration is present and load all settings.
+        Raises ValueError if any required configuration is missing.
+        """
+        # Load all configuration sections
+        self.health_config = self.config_manager.get_health_bar_config()
+        self.food_config = self.config_manager.get_food_area_config()
+        self.loot_config = self.config_manager.get_loot_pickup_config()
+        self.combat_config = self.config_manager.get_combat_config()
+        self.debug_config = self.config_manager.get_debug_config()
         
-        Args:
-            distance: Distance in pixels to move from current position
-            visualize: Whether to visualize the path (default: False for random movements)
-            
-        Returns:
-            True if movement was successful, False otherwise
-        """
-        try:
-            # Get current mouse position
-            current_x, current_y = pyautogui.position()
-            
-            # Calculate random position at specified distance
-            angle = random.uniform(0, 2 * np.pi)  # Random angle
-            new_x = int(current_x + distance * np.cos(angle))
-            new_y = int(current_y + distance * np.sin(angle))
-            
-            # Ensure the new position is within screen bounds
-            screen_width = pyautogui.size().width
-            screen_height = pyautogui.size().height
-            new_x = max(0, min(new_x, screen_width - 1))
-            new_y = max(0, min(new_y, screen_height - 1))
-            
-            print(f"Random mouse movement: ({current_x}, {current_y}) -> ({new_x}, {new_y})")
-            
-            # Use human-like movement if available, otherwise fall back to standard movement
-            if self.use_human_paths and self.human_path:
-                # Use human path finder for random movement
-                current_pos = (current_x, current_y)
-                target_pos = (new_x, new_y)
-                
-                # Use human path finder for random movement
-                success = self.human_path.move_mouse(new_x, new_y)
-                if success:
-                    return True
-                else:
-                    # Fallback to standard movement if path generation fails
-                    pyautogui.moveTo(new_x, new_y, duration=random.uniform(0.1, 0.3))
-                    return True
-            else:
-                # Use standard mouse movement
-                pyautogui.moveTo(new_x, new_y, duration=random.uniform(0.1, 0.3))
-                return True
-                
-        except Exception as e:
-            print(f"Error during random mouse movement: {e}")
-            return False
-    
-    def move_mouse_human_like(self, target_x: int, target_y: int, click_type: str = "left") -> bool:
-        """
-        Move mouse to target using human-like paths and perform a click
+        # Load specific configuration values
+        self.health_bar_position = self.config_manager.get_health_bar_position()
+        self.food_area_coordinates = self.config_manager.get_food_area_coordinates()
+        self.inventory_area_coordinates = self.config_manager.get_inventory_area_coordinates()
         
-        Args:
-            target_x: Target X coordinate
-            target_y: Target Y coordinate
-            click_type: Type of click to perform ("left", "right", "double")
-            
-        Returns:
-            True if movement and click successful, False otherwise
-        """
-        try:
-            if self.use_human_paths and self.human_path:
-                # Use human path finder for movement and clicking
-                return self.human_path.move_mouse_and_click(target_x, target_y, click_type)
-            else:
-                # Use standard mouse movement
-                return self.mouse.click_at(target_x, target_y, click_type)
-                
-        except Exception as e:
-            print(f"Error in human-like mouse movement: {e}")
-            # Fallback to standard movement
-            return self.mouse.click_at(target_x, target_y, click_type)
+        # Load boolean flags
+        self.food_area_enabled = self.config_manager.is_food_area_enabled()
+        self.loot_pickup_enabled = self.config_manager.is_loot_pickup_enabled()
+        self.random_mouse_movement_enabled = self.config_manager.is_random_mouse_movement_enabled()
+        self.breaks_enabled = self.config_manager.is_breaks_enabled()
         
-    def find_runescape_window(self) -> Optional[Tuple[int, int, int, int]]:
-        """
-        Find the RuneScape window and return its coordinates (x, y, width, height)
-        """
-        try:
-            # Try to find window by title
-            import win32gui
-            import win32con
-            
-            def enum_windows_callback(hwnd, windows):
-                if win32gui.IsWindowVisible(hwnd):
-                    window_title = win32gui.GetWindowText(hwnd)
-                    if self.window_title.lower() in window_title.lower():
-                        rect = win32gui.GetWindowRect(hwnd)
-                        x, y, w, h = rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]
-                        windows.append((x, y, w, h))
-                return True
-            
-            windows = []
-            win32gui.EnumWindows(enum_windows_callback, windows)
-            
-            if windows:
-                return windows[0]  # Return the first matching window
-            else:
-                print(f"Could not find window with title containing '{self.window_title}'")
-                return None
-                
-        except ImportError:
-            print("win32gui not available. Please install pywin32: pip install pywin32")
-            return None
-        except Exception as e:
-            print(f"Error finding window: {e}")
-            return None
+        # Load combat settings
+        self.default_target_color = self.combat_config.get('default_target_color', '00FFFFFA')
+        self.pixel_method = self.combat_config.get('pixel_method', 'smart')
+        self.red_threshold = self.food_config.get('red_threshold', 5)
+        
+        # Load loot settings
+        self.loot_color = self.loot_config.get('loot_color', 'AA00FFFF')
+        self.loot_tolerance = self.loot_config.get('tolerance', 10)
+        self.loot_max_distance = self.loot_config.get('max_distance', 500)
+        self.loot_save_debug = self.loot_config.get('save_debug', True)
+        self.loot_bury = self.loot_config.get('bury', False)
+        
+        # Load break settings
+        self.break_interval_min = self.combat_config.get('break_interval_min', 29)
+        self.break_interval_max = self.combat_config.get('break_interval_max', 33)
+        self.break_duration_min = self.combat_config.get('break_duration_min', 2)
+        self.break_duration_max = self.combat_config.get('break_duration_max', 6)
+        
+        # Validate required configuration
+        self._validate_required_config()
+        
+        print("Configuration validation and loading completed")
     
-
-    
-    def click_on_element(self, element_coords: Tuple[int, int, int, int], 
-                        region: Tuple[int, int, int, int], 
-                        click_type: str = "left") -> bool:
+    def _validate_required_config(self):
         """
-        Click on an element within the game window using natural mouse movement
+        Validate that all required configuration is present.
+        Raises ValueError if any required configuration is missing.
         """
-        try:
-            # Calculate absolute screen coordinates
-            region_x, region_y = region[0], region[1]
-            element_x, element_y = element_coords[0], element_coords[1]
+        # Health bar position is required
+        if self.health_bar_position is None:
+            raise ValueError("Health bar position is required but not configured. Please configure health bar position in your config file.")
+        
+        # If food area is enabled, coordinates must be provided
+        if self.food_area_enabled and self.food_area_coordinates is None:
+            raise ValueError("Food area is enabled but coordinates are not configured. Please configure food area coordinates in your config file.")
+        
+        # If loot pickup is enabled and burying is enabled, inventory area must be provided
+        if self.loot_pickup_enabled and self.loot_bury and self.inventory_area_coordinates is None:
+            raise ValueError("Loot pickup with burying is enabled but inventory area is not configured. Please configure inventory area coordinates in your config file.")
             
-            # Center of the element
-            center_x = region_x + element_x + element_coords[2] // 2
-            center_y = region_y + element_y + element_coords[3] // 2
-            
-            # Use human-like mouse movement if available, otherwise use standard movement
-            return self.move_mouse_human_like(center_x, center_y, click_type)
-            
-        except Exception as e:
-            print(f"Error clicking: {e}")
-            return False
+    def print_config_summary(self):
+        """
+        Print a summary of the bot's configuration settings.
+        """
+        print("\n=== Attack Bot Configuration Summary ===")
+        print(f"Health bar position: {self.health_bar_position}")
+        print(f"Default target color: #{self.default_target_color}")
+        print(f"Pixel selection method: {self.pixel_method}")
+        
+        # Food area settings
+        print(f"Auto-eating: {'Enabled' if self.food_area_enabled else 'Disabled'}")
+        if self.food_area_enabled:
+            print(f"  Food area coordinates: {self.food_area_coordinates}")
+            print(f"  Health monitoring threshold: {self.red_threshold}")
+        
+        # Loot pickup settings
+        print(f"Loot pickup: {'Enabled' if self.loot_pickup_enabled else 'Disabled'}")
+        if self.loot_pickup_enabled:
+            print(f"  Loot color: #{self.loot_color}")
+            print(f"  Tolerance: {self.loot_tolerance}")
+            print(f"  Max distance: {self.loot_max_distance}")
+            print(f"  Bury items: {'Yes' if self.loot_bury else 'No'}")
+            print(f"  Save debug screenshots: {'Yes' if self.loot_save_debug else 'No'}")
+        
+        # Combat behavior settings
+        print(f"Random mouse movement: {'Enabled' if self.random_mouse_movement_enabled else 'Disabled'}")
+        print(f"Automatic breaks: {'Enabled' if self.breaks_enabled else 'Disabled'}")
+        if self.breaks_enabled:
+            print(f"  Break intervals: {self.break_interval_min}-{self.break_interval_max} minutes")
+            print(f"  Break duration: {self.break_duration_min}-{self.break_duration_max} minutes")
+        
+        # Human movement settings
+        print(f"Human-like movement: {'Enabled' if self.use_human_paths else 'Disabled'}")
+        print()
     
     def click_random_pixel_by_color(self, hex_color: str, tolerance: int = 10, method: str = "smart") -> bool:
         """
@@ -190,43 +152,33 @@ class AttackBot:
             tolerance: Color tolerance for matching
             method: "random" for original method, "smart" for blob-based selection
         """
-        # Find RuneScape window if not already found
-        if self.window_region is None:
-            self.window_region = self.find_runescape_window()
-            if not self.window_region:
-                print("Could not find RuneScape window")
-                return False
-        
-        # Capture screenshot of the RuneScape window
-        screenshot = jake.screenshot_utils.capture_screen_region(self.window_region)
-        
-        # Use the new pixel selection logic with downsampling for high-resolution screens
-        downsample_factor = 4  # Can be made configurable
+        # Use mouse for color-based clicking
         if method == "smart":
+            screenshot = jake.screenshot_utils.capture_screen_region(self.window_region)
+            downsample_factor = 4  # Can be made configurable
             selected_pixel = jake.pixel_selection.smart_pixel_select(screenshot, hex_color, tolerance, return_debug=False, downsample_factor=downsample_factor)
+            
+            if selected_pixel is None:
+                print(f"No pixels found with color {hex_color} using method '{method}'")
+                return False
+            
+            # Handle the return type properly
+            if isinstance(selected_pixel, tuple) and len(selected_pixel) == 2:
+                pixel_x, pixel_y = selected_pixel
+            else:
+                print(f"Unexpected pixel selection result: {selected_pixel}")
+                return False
+            
+            # Convert to absolute screen coordinates
+            window_x, window_y = self.window_region[0], self.window_region[1]
+            screen_x = window_x + pixel_x
+            screen_y = window_y + pixel_y
+            
+            # Use mouse for movement and clicking
+            return self.mouse.move_mouse(screen_x, screen_y, "left")
         else:
-            selected_pixel = jake.pixel_selection.random_pixel_select(screenshot, hex_color, tolerance)
-        
-        if selected_pixel is None:
-            print(f"No pixels found with color {hex_color} using method '{method}'")
-            return False
-        
-        pixel_x, pixel_y = selected_pixel
-        
-        # Convert to absolute screen coordinates (RuneScape window)
-        window_x, window_y = self.window_region[0], self.window_region[1]
-        screen_x = window_x + pixel_x
-        screen_y = window_y + pixel_y
-        
-        # Click on the pixel
-        try:
-            success = self.move_mouse_human_like(screen_x, screen_y, "left")
-            if success:
-                print(f"Clicked on pixel ({pixel_x}, {pixel_y}) with color {hex_color} at screen position ({screen_x}, {screen_y}) using method '{method}'")
-            return success
-        except Exception as e:
-            print(f"Error clicking on pixel: {e}")
-            return False
+            # Use mouse's built-in color-based clicking
+            return self.mouse.click_random_pixel_by_color(hex_color, tolerance, verify_click=False)
     
     def pickup_loot(self, loot_color: str = "FFAA00FF", tolerance: int = 10, max_distance: int = 500, 
                    save_debug: bool = True, bury: bool = False, inventory_area: Optional[Tuple[int, int, int, int]] = None) -> bool:
@@ -245,13 +197,6 @@ class AttackBot:
             True if loot was found and clicked, False otherwise
         """
         try:
-            # Find RuneScape window if not already found
-            if self.window_region is None:
-                self.window_region = self.find_runescape_window()
-                if not self.window_region:
-                    print("Could not find RuneScape window")
-                    return False
-            
             # Capture screenshot of the RuneScape window
             screenshot = jake.screenshot_utils.capture_screen_region(self.window_region)
             
@@ -269,10 +214,12 @@ class AttackBot:
             if not loot_pixels:
                 print(f"No loot pixels found with color #{loot_color}")
                 if save_debug:
-                    # Save debug screenshot showing no loot found
-                    debug_filename = f"debug_screenshots/loot_debug_no_pixels_{loot_color}.png"
-                    cv2.imwrite(debug_filename, screenshot)
-                    print(f"Debug screenshot saved: {debug_filename}")
+                    jake.screenshot_utils.save_debug_screenshot(
+                        self.window_region,
+                        f"loot_debug_no_pixels_{loot_color}",
+                        color_detection=(loot_color, tolerance),
+                        save_original=True
+                    )
                 return False
             
             print(f"Found {len(loot_pixels)} loot pixels, filtering by distance...")
@@ -297,19 +244,14 @@ class AttackBot:
                 print(f"No loot pixels found within {max_distance} pixels of center")
                 if save_debug:
                     # Save debug screenshot showing all loot pixels (outside range)
-                    debug_screenshot = screenshot.copy()
-                    
-                    # Draw all loot pixels in red
-                    for x, y in loot_pixels:
-                        cv2.circle(debug_screenshot, (x, y), 2, (0, 0, 255), -1)  # Red dots
-                    
-                    # Draw center and range circle
-                    cv2.circle(debug_screenshot, (center_x, center_y), 5, (255, 255, 255), -1)  # White center
-                    cv2.circle(debug_screenshot, (center_x, center_y), max_distance, (0, 255, 0), 2)  # Green range circle
-                    
-                    debug_filename = f"debug_screenshots/loot_debug_outside_range_{loot_color}.png"
-                    cv2.imwrite(debug_filename, debug_screenshot)
-                    print(f"Debug screenshot saved: {debug_filename}")
+                    # Mark center and range circle
+                    jake.screenshot_utils.save_debug_screenshot(
+                        self.window_region,
+                        f"loot_debug_outside_range_{loot_color}",
+                        target_positions=[(center_x, center_y, "white")],
+                        color_detection=(loot_color, tolerance),
+                        save_original=True
+                    )
                 return False
             
             print(f"Found {len(valid_loot_pixels)} valid loot pixels within range")
@@ -359,53 +301,29 @@ class AttackBot:
                             best_cluster = cluster_id
                             best_centroid = (cluster_centroid_x, cluster_centroid_y)
                     
+                    if best_centroid is None:
+                        print("No valid centroid found")
+                        return False
+                        
                     selected_pixel = best_centroid
                     pixel_x, pixel_y = selected_pixel
                     print(f"Selected cluster {best_cluster} centroid at ({pixel_x}, {pixel_y}) from {len(valid_loot_pixels)} valid pixels (distance to center: {min_distance:.1f})")
                     
                     # Draw cluster circles in debug mode
                     if save_debug:
-                        debug_screenshot = screenshot.copy()
+                        # Mark selected pixel and center
+                        target_positions = [
+                            (pixel_x, pixel_y, "red"),  # Selected pixel
+                            (center_x, center_y, "white"),  # Center point
+                        ]
                         
-                        # Draw all loot pixels in blue
-                        for x, y in loot_pixels:
-                            cv2.circle(debug_screenshot, (x, y), 1, (255, 0, 0), -1)  # Blue dots for all loot
-                        
-                        # Draw valid loot pixels in green
-                        for x, y in valid_loot_pixels:
-                            cv2.circle(debug_screenshot, (x, y), 3, (0, 255, 0), -1)  # Green dots for valid loot
-                        
-                        # Draw cluster circles
-                        for cluster_id in unique_clusters:
-                            cluster_mask = cluster_labels == cluster_id
-                            cluster_pixels = pixel_coords[cluster_mask]
-                            
-                            # Calculate cluster centroid and radius
-                            cluster_centroid_x = int(np.mean(cluster_pixels[:, 0]))
-                            cluster_centroid_y = int(np.mean(cluster_pixels[:, 1]))
-                            
-                            # Calculate radius as max distance from centroid to any point in cluster
-                            distances = np.sqrt((cluster_pixels[:, 0] - cluster_centroid_x)**2 + (cluster_pixels[:, 1] - cluster_centroid_y)**2)
-                            radius = int(np.max(distances)) + 5  # Add some padding
-                            
-                            # Draw circle around cluster
-                            color = (0, 255, 255) if cluster_id == best_cluster else (128, 128, 128)  # Yellow for best, gray for others
-                            cv2.circle(debug_screenshot, (cluster_centroid_x, cluster_centroid_y), radius, color, 2)
-                            
-                            # Add cluster label
-                            cv2.putText(debug_screenshot, f"C{cluster_id}", (cluster_centroid_x + radius + 5, cluster_centroid_y), 
-                                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                        
-                        # Draw selected pixel in red
-                        cv2.circle(debug_screenshot, (pixel_x, pixel_y), 5, (0, 0, 255), -1)  # Red dot for selected
-                        
-                        # Draw center and range circle
-                        cv2.circle(debug_screenshot, (center_x, center_y), 5, (255, 255, 255), -1)  # White center
-                        cv2.circle(debug_screenshot, (center_x, center_y), max_distance, (0, 255, 0), 2)  # Green range circle
-                        
-                        debug_filename = f"debug_screenshots/loot_debug_success_{loot_color}.png"
-                        cv2.imwrite(debug_filename, debug_screenshot)
-                        print(f"Debug screenshot saved: {debug_filename}")
+                        jake.screenshot_utils.save_debug_screenshot(
+                            self.window_region,
+                            f"loot_debug_success_{loot_color}",
+                            target_positions=target_positions,
+                            color_detection=(loot_color, tolerance),
+                            save_original=True
+                        )
             else:
                 print("No valid loot pixels found")
                 return False
@@ -423,7 +341,7 @@ class AttackBot:
             print(f"Right-clicking on loot at pixel ({pixel_x}, {pixel_y}) -> screen ({screen_x}, {screen_y}) (with {right_click_offset}px offset)")
             
             try:
-                success = self.move_mouse_human_like(screen_x, screen_y, "right")
+                success = self.mouse.move_mouse(screen_x, screen_y, "right")
                 if not success:
                     print("Failed to right-click on loot")
                     return False
@@ -454,9 +372,12 @@ class AttackBot:
                 if not menu_loot_pixels:
                     print("No loot color found in menu box")
                     if save_debug:
-                        debug_filename = f"debug_screenshots/loot_menu_no_pixels_{loot_color}.png"
-                        cv2.imwrite(debug_filename, menu_screenshot)
-                        print(f"Menu debug screenshot saved: {debug_filename}")
+                        jake.screenshot_utils.save_debug_screenshot(
+                            menu_region,
+                            f"loot_menu_no_pixels_{loot_color}",
+                            color_detection=(loot_color, tolerance),
+                            save_original=True
+                        )
                     return False
                 
                 print(f"Found {len(menu_loot_pixels)} loot pixels in menu")
@@ -497,39 +418,18 @@ class AttackBot:
                         
                         # Draw cluster circles in debug mode
                         if save_debug:
-                            debug_screenshot = menu_screenshot.copy()
+                            # Mark selected menu pixel
+                            target_positions = [
+                                (menu_pixel_x, menu_pixel_y, "red"),  # Selected menu pixel
+                            ]
                             
-                            # Draw all menu loot pixels in blue
-                            for x, y in menu_loot_pixels:
-                                cv2.circle(debug_screenshot, (x, y), 2, (255, 0, 0), -1)  # Blue dots
-                            
-                            # Draw cluster circles
-                            for cluster_id in unique_clusters:
-                                cluster_mask = cluster_labels == cluster_id
-                                cluster_pixels_debug = menu_pixel_coords[cluster_mask]
-                                
-                                # Calculate cluster centroid and radius
-                                cluster_centroid_x = int(np.mean(cluster_pixels_debug[:, 0]))
-                                cluster_centroid_y = int(np.mean(cluster_pixels_debug[:, 1]))
-                                
-                                # Calculate radius as max distance from centroid to any point in cluster
-                                distances = np.sqrt((cluster_pixels_debug[:, 0] - cluster_centroid_x)**2 + (cluster_pixels_debug[:, 1] - cluster_centroid_y)**2)
-                                radius = int(np.max(distances)) + 5  # Add some padding
-                                
-                                # Draw circle around cluster
-                                color = (0, 255, 255) if cluster_id == random_cluster_id else (128, 128, 128)  # Yellow for selected, gray for others
-                                cv2.circle(debug_screenshot, (cluster_centroid_x, cluster_centroid_y), radius, color, 2)
-                                
-                                # Add cluster label
-                                cv2.putText(debug_screenshot, f"C{cluster_id}", (cluster_centroid_x + radius + 5, cluster_centroid_y), 
-                                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                            
-                            # Draw selected menu pixel in red
-                            cv2.circle(debug_screenshot, (menu_pixel_x, menu_pixel_y), 4, (0, 0, 255), -1)  # Red dot
-                            
-                            debug_filename = f"debug_screenshots/loot_menu_success_{loot_color}.png"
-                            cv2.imwrite(debug_filename, debug_screenshot)
-                            print(f"Menu debug screenshot saved: {debug_filename}")
+                            jake.screenshot_utils.save_debug_screenshot(
+                                menu_region,
+                                f"loot_menu_success_{loot_color}",
+                                target_positions=target_positions,
+                                color_detection=(loot_color, tolerance),
+                                save_original=True
+                            )
                 else:
                     print("No loot pixels found in menu")
                     return False
@@ -541,7 +441,7 @@ class AttackBot:
                 print(f"Left-clicking on menu option at ({menu_pixel_x}, {menu_pixel_y}) -> screen ({absolute_menu_x}, {absolute_menu_y})")
                 
                 # Left-click on the menu option
-                success = self.move_mouse_human_like(absolute_menu_x, absolute_menu_y, "left")
+                success = self.mouse.move_mouse(absolute_menu_x, absolute_menu_y, "left")
                 if not success:
                     print("Failed to click on menu option")
                     return False
@@ -549,18 +449,18 @@ class AttackBot:
                 
                 if save_debug:
                     # Save debug screenshot of menu area
-                    debug_screenshot = menu_screenshot.copy()
+                    # Mark selected menu pixel
+                    target_positions = [
+                        (menu_pixel_x, menu_pixel_y, "red"),  # Selected menu pixel
+                    ]
                     
-                    # Draw all menu loot pixels in blue
-                    for x, y in menu_loot_pixels:
-                        cv2.circle(debug_screenshot, (x, y), 2, (255, 0, 0), -1)  # Blue dots
-                    
-                    # Draw selected menu pixel in red
-                    cv2.circle(debug_screenshot, (menu_pixel_x, menu_pixel_y), 4, (0, 0, 255), -1)  # Red dot
-                    
-                    debug_filename = f"debug_screenshots/loot_menu_success_{loot_color}.png"
-                    cv2.imwrite(debug_filename, debug_screenshot)
-                    print(f"Menu debug screenshot saved: {debug_filename}")
+                    jake.screenshot_utils.save_debug_screenshot(
+                        menu_region,
+                        f"loot_menu_success_{loot_color}",
+                        target_positions=target_positions,
+                        color_detection=(loot_color, tolerance),
+                        save_original=True
+                    )
                 
                 # Check if burying is enabled and inventory area is configured
                 if bury and inventory_area is not None:
@@ -579,35 +479,37 @@ class AttackBot:
                     print(f"Clicking in inventory area at ({random_inv_x}, {random_inv_y})")
                     
                     # Click in the inventory area
-                    success = self.move_mouse_human_like(random_inv_x, random_inv_y, "left")
+                    success = self.mouse.move_mouse(random_inv_x, random_inv_y, "left")
                     if not success:
                         print("Failed to click in inventory area")
                         return False
                     print("Successfully clicked in inventory area!")
                     
                     # Wait a bit after burying before random mouse movement
-                    print("Waiting 0.25 seconds after burying...")
+                    print("Waiting 0.5 seconds after burying...")
                     time.sleep(0.5)
                     
                     # Random mouse movement after burying (human-like behavior)
                     print("Moving mouse randomly after burying...")
-                    self.move_mouse_randomly(distance=100, visualize=False)
+                    self.mouse.move_mouse_randomly(distance=100)
                     
                     if save_debug:
                         # Save debug screenshot of inventory click
-                        debug_filename = f"debug_screenshots/loot_bury_click_{loot_color}.png"
-                        
-                        # Capture screenshot of inventory area
                         inv_region = (inv_x1, inv_y1, inv_x2 - inv_x1, inv_y2 - inv_y1)
-                        inv_screenshot = jake.screenshot_utils.capture_screen_region(inv_region)
                         
-                        # Draw click point
+                        # Mark click point
                         click_x = random_inv_x - inv_x1
                         click_y = random_inv_y - inv_y1
-                        cv2.circle(inv_screenshot, (click_x, click_y), 5, (0, 0, 255), -1)  # Red dot
+                        target_positions = [
+                            (click_x, click_y, "red"),  # Click point
+                        ]
                         
-                        cv2.imwrite(debug_filename, inv_screenshot)
-                        print(f"Bury click debug screenshot saved: {debug_filename}")
+                        jake.screenshot_utils.save_debug_screenshot(
+                            inv_region,
+                            f"loot_bury_click_{loot_color}",
+                            target_positions=target_positions,
+                            save_original=True
+                        )
                 
                 return True
                 
@@ -619,34 +521,18 @@ class AttackBot:
             print(f"Error in loot pickup: {e}")
             return False
     
-    def attack_sequence(self, target_hex_color: str = "00FFFFFA", 
-                       health_x: Optional[int] = None,
-                       health_y: Optional[int] = None,
-                       wait_time: float = 4.0,
-                       food_area: Optional[Tuple[int, int, int, int]] = None,
-                       red_threshold: int = 5,
-                       pixel_method: str = "smart",
-                       random_mouse_movement: bool = False,
-                       enable_breaks: bool = False):
+    def attack_sequence(self, target_hex_color: Optional[str] = None, wait_time: float = 4.0):
         """
         Complete attack sequence: find target, click, check combat by color, and auto-eat
         """
+        # Use default target color from config if not provided
+        if target_hex_color is None:
+            target_hex_color = self.default_target_color
+            
         print(f"Starting attack sequence for color: {target_hex_color}")
-        
-        # Load health bar position if not provided
-        if health_x is None or health_y is None:
-            health_pos = self.load_health_bar_position()
-            if health_pos is None:
-                print("No health bar position found. Please configure health bar position in your config file.")
-                return False
-            health_x, health_y = health_pos
-        
-        # Load food area if not provided
-        if food_area is None:
-            food_area = self.load_food_area()
-            if food_area is None:
-                print("No food area configured. Auto-eating will be disabled.")
-                print("Configure food area in your config file to enable auto-eating.")
+        assert self.health_bar_position is not None
+        health_x, health_y = self.health_bar_position
+        food_area = self.food_area_coordinates if self.food_area_enabled else None
         
         # Step 0: Check if already in combat (mob auto-attacked after previous death)
         print("Step 0: Checking if already in combat...")
@@ -655,11 +541,13 @@ class AttackBot:
         if combat_detected:
             print("Already in combat! Skipping target selection and monitoring for mob death...")
             # Skip to combat monitoring phase
-            return self.monitor_combat_and_health(health_x, health_y, food_area, red_threshold, random_mouse_movement)
+            return self.monitor_combat_and_health(health_x, health_y, food_area)
         
         # Step 1: Find and click on target pixel
         print("Step 1: Finding and clicking on target...")
-        if not self.click_random_pixel_by_color(target_hex_color, method=pixel_method):
+        # At this point, target_hex_color is guaranteed to be a string
+        assert target_hex_color is not None
+        if not self.click_random_pixel_by_color(target_hex_color, method=self.pixel_method):
             print("Failed to find or click on target")
             return False
         
@@ -676,11 +564,10 @@ class AttackBot:
             return False  # Signal to retry
         else:
             print("Combat detected! Now monitoring for mob death and health...")
-            return self.monitor_combat_and_health(health_x, health_y, food_area, red_threshold, random_mouse_movement)
+            return self.monitor_combat_and_health(health_x, health_y, food_area)
     
     def monitor_combat_and_health(self, health_x: int, health_y: int, 
-                                 food_area: Optional[Tuple[int, int, int, int]], 
-                                 red_threshold: int, random_mouse_movement: bool = False) -> bool:
+                                 food_area: Optional[Tuple[int, int, int, int]]) -> bool:
         """
         Monitor combat status and health during combat
         
@@ -688,7 +575,6 @@ class AttackBot:
             health_x: X coordinate of health bar pixel
             health_y: Y coordinate of health bar pixel
             food_area: Food area coordinates for auto-eating
-            red_threshold: Threshold for health monitoring
             
         Returns:
             True if mob died and waiting completed, False otherwise
@@ -712,8 +598,8 @@ class AttackBot:
                 print(f"Timeout reached ({timeout_duration} seconds). Giving up on current mob and restarting attack sequence.")
                 return False  # Signal to restart attack sequence
             # Random mouse movement during combat (5% chance each tick)
-            if random_mouse_movement and random.random() < 0.05:
-                self.move_mouse_randomly(distance=50, visualize=False)
+            if self.random_mouse_movement_enabled and random.random() < 0.05:
+                self.mouse.move_mouse_randomly(distance=50)
             
             # Check for mob death first
             death_detected = self.check_combat_status_by_color(health_x, health_y, mode="death", tolerance=30)
@@ -722,24 +608,20 @@ class AttackBot:
                 print("Mob is dead!")
                 
                 # Check if loot pickup is enabled
-                loot_config = self.load_loot_config()
-                print(f"Loot config: {loot_config}")
-                print(f"Bury: {loot_config.get('bury', False)}")
-                print(f"Inventory area: {loot_config.get('inventory_area', None)}")
-                if loot_config.get('enabled', True):
+                if self.loot_pickup_enabled:
                     print("Waiting 1 second before attempting to pickup loot...")
                     time.sleep(3)
                     
                     print("Attempting to pickup loot...")
                     
-                    # Try to pickup loot with configured settings
+                    # Try to pickup loot with pre-loaded settings
                     loot_picked = self.pickup_loot(
-                        loot_color=loot_config.get('loot_color', 'AA00FFFF'),
-                        tolerance=loot_config.get('tolerance', 10),
-                        max_distance=loot_config.get('max_distance', 500),
-                        save_debug=loot_config.get('save_debug', True),
-                        bury=loot_config.get('bury', False),
-                        inventory_area=loot_config.get('inventory_area', None)
+                        loot_color=self.loot_color,
+                        tolerance=self.loot_tolerance,
+                        max_distance=self.loot_max_distance,
+                        save_debug=self.loot_save_debug,
+                        bury=self.loot_bury,
+                        inventory_area=self.inventory_area_coordinates
                     )
                     if loot_picked:
                         print("Loot pickup successful!")
@@ -769,7 +651,7 @@ class AttackBot:
                 left_distance = jake.color_utils.calculate_color_distance(left_color, pure_red)
                 
                 # Check if BOTH points are close to pure red (small distance = closer to red)
-                if left_distance <= red_threshold:
+                if left_distance <= self.red_threshold:
                     print(f"Low health detected! Both points are close to red:")
                     print(f"Left pixel: RGB{left_color} (distance to red: {left_distance:.1f})")
                     
@@ -781,7 +663,7 @@ class AttackBot:
                     print(f"Eating food at ({random_x}, {random_y})")
                     
                     try:
-                        success = self.move_mouse_human_like(random_x, random_y, "left")
+                        success = self.mouse.move_mouse(random_x, random_y, "left")
                         if success:
                             print("Food eaten! Continuing combat...")
                             
@@ -840,40 +722,116 @@ class AttackBot:
                 
         except Exception as e:
             print(f"Error checking combat status by color: {e}")
-            return False
-    
-    def load_health_bar_position(self) -> Optional[Tuple[int, int]]:
-        """
-        Load saved health bar position from config manager
-        """
-        health_pos = self.config_manager.get_health_bar_position()
-        if health_pos:
-            print(f"Loaded health bar position from config: {health_pos}")
-            return health_pos
-        return None
+            return False 
 
-    def load_food_area(self) -> Optional[Tuple[int, int, int, int]]:
+    def run(self, target_hex_color: Optional[str] = None, max_cycles: Optional[int] = None):
         """
-        Load saved food area from config manager
+        Run the attack bot in a continuous loop
+        
+        Args:
+            target_hex_color: Target color to attack (uses default from config if None)
+            max_cycles: Maximum number of cycles to run (None for infinite)
         """
-        food_area = self.config_manager.get_food_area_coordinates()
-        if food_area:
-            print(f"Loaded food area from config: {food_area}")
-            return food_area
-        return None
-
-    def load_loot_config(self) -> dict:
-        """
-        Load loot configuration from config manager
-        """
-        loot_config = self.config_manager.get_loot_pickup_config()
-        inventory_area = self.config_manager.get_inventory_area_coordinates()
-        return {
-            'loot_color': loot_config.get('loot_color', 'AA00FFFF'),
-            'tolerance': loot_config.get('tolerance', 10),
-            'max_distance': loot_config.get('max_distance', 500),
-            'enabled': loot_config.get('enabled', True),
-            'save_debug': loot_config.get('save_debug', True),
-            'inventory_area': inventory_area if inventory_area else (0, 0, 0, 0),
-            'bury': loot_config.get('bury', False)
-        } 
+        if not self.initialized:
+            print("Attack Bot is not properly initialized. Cannot run.")
+            return
+        
+        print("Starting Attack Bot")
+        print("Press 'q' to quit")
+        
+        cycle_count = 0
+        session_start_time = time.time()
+        last_break_time = session_start_time
+        self.running = True
+        
+        try:
+            while self.running:
+                # Check max cycles
+                if max_cycles and cycle_count >= max_cycles:
+                    print(f"\nReached maximum cycles ({max_cycles}). Stopping bot.")
+                    break
+                
+                cycle_count += 1
+                print(f"\nStarting cycle {cycle_count}")
+                
+                # Check if it's time for a break
+                if self.breaks_enabled:
+                    current_time = time.time()
+                    session_duration = current_time - session_start_time
+                    time_since_last_break = current_time - last_break_time
+                    
+                    # Get break settings from bot's pre-loaded config
+                    break_interval = random.uniform(
+                        self.break_interval_min * 60,
+                        self.break_interval_max * 60
+                    )
+                    
+                    if time_since_last_break >= break_interval:
+                        # Calculate break duration from bot's pre-loaded config
+                        break_duration = random.uniform(
+                            self.break_duration_min * 60,
+                            self.break_duration_max * 60
+                        )
+                        break_minutes = break_duration / 60
+                        
+                        # Log break to file
+                        break_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                        break_log_entry = f"{break_timestamp} - Break started: {break_minutes:.1f} minute break after {time_since_last_break / 60:.1f} minutes of activity"
+                        
+                        try:
+                            with open("break_log.txt", "a") as f:
+                                f.write(break_log_entry + "\n")
+                            print(f"Break logged to break_log.txt")
+                        except Exception as e:
+                            print(f"Error logging break: {e}")
+                        
+                        print(f"\n=== TAKING BREAK ===")
+                        print(f"Session duration: {session_duration / 60:.1f} minutes")
+                        print(f"Time since last break: {time_since_last_break / 60:.1f} minutes")
+                        print(f"Taking a {break_minutes:.1f} minute break...")
+                        print("You can manually stop the bot during break by pressing 'q'")
+                        
+                        # Take the break
+                        break_start = time.time()
+                        while time.time() - break_start < break_duration and self.running:
+                            if keyboard.is_pressed('q'):
+                                print("Stopping attack bot during break...")
+                                self.running = False
+                                break
+                            
+                            # Show countdown every 30 seconds
+                            remaining = break_duration - (time.time() - break_start)
+                            if int(remaining) % 30 == 0 and remaining > 0:
+                                print(f"Break remaining: {remaining / 60:.1f} minutes")
+                            
+                            time.sleep(1)
+                        
+                        if self.running:
+                            # Log break completion
+                            break_end_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                            break_end_entry = f"{break_end_timestamp} - Break finished: {break_minutes:.1f} minute break completed"
+                            
+                            try:
+                                with open("break_log.txt", "a") as f:
+                                    f.write(break_end_entry + "\n")
+                            except Exception as e:
+                                print(f"Error logging break completion: {e}")
+                            
+                            print("Break finished! Resuming attack sequence...")
+                            last_break_time = time.time()
+                            continue
+                
+                # Run one attack sequence
+                success = self.attack_sequence(target_hex_color)
+                
+                if success:
+                    print("Attack successful! Waiting before next attack...")
+                else:
+                    print("Attack failed or no targets found. Retrying...")
+                
+        except KeyboardInterrupt:
+            print("\nBot stopped by user")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+        finally:
+            print("Attack Bot stopped") 

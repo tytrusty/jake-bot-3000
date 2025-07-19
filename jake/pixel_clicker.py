@@ -17,13 +17,14 @@ from typing import Optional, Tuple
 class PixelClicker:
     """Handles clicking on pixels with specific colors, including verification."""
     
-    def __init__(self, window_region: Optional[Tuple[int, int, int, int]], use_human_paths: bool = False):
+    def __init__(self, window_region: Optional[Tuple[int, int, int, int]], use_human_paths: bool = False, config_manager=None):
         """
         Initialize the pixel clicker.
         
         Args:
             window_region: Window region (x, y, width, height) for screenshot capture
             use_human_paths: Whether to use human-like mouse movement paths
+            config_manager: Configuration manager instance for human path settings
         """
         self.window_region = window_region
         self.use_human_paths = use_human_paths
@@ -37,9 +38,36 @@ class PixelClicker:
             try:
                 self.human_mouse = jake.path.HumanPath()
                 print("Human path finder initialized successfully")
+                
+                # Apply human path configuration if config manager provided
+                if config_manager:
+                    self._apply_human_config(config_manager)
+                    
             except Exception as e:
                 print(f"Failed to initialize human path finder: {e}")
                 self.use_human_paths = False
+    
+    def _apply_human_config(self, config_manager):
+        """
+        Apply human path configuration to the human_mouse instance.
+        
+        Args:
+            config_manager: Configuration manager instance
+        """
+        if not self.human_mouse:
+            return
+            
+        # Get human movement configuration
+        human_config = config_manager.get_human_movement_config()
+        speed_range = config_manager.get_speed_range()
+        
+        # Apply all configuration settings
+        self.human_mouse.speed_range = speed_range
+        self.human_mouse.use_random_selection = human_config.get('use_random_selection', False)
+        self.human_mouse.k = human_config.get('k_nearest', 5)  # Note: config uses 'k_nearest'
+        self.human_mouse.use_iterative_movement = human_config.get('use_iterative_movement', False)
+        self.human_mouse.max_iterations = human_config.get('max_iterations', 10)
+        self.human_mouse.tolerance = human_config.get('tolerance', 5.0)
     
     def move_mouse(self, target_x: int, target_y: int, click_type: str = "none") -> bool:
         """
@@ -186,3 +214,35 @@ class PixelClicker:
         
         print(f"Clicking random position in box ({x1}, {y1}, {x2}, {y2}) at ({random_x}, {random_y})")
         return self.move_mouse(random_x, random_y, click_type)
+    
+    def move_mouse_randomly(self, distance: int = 50) -> bool:
+        """
+        Move mouse to a random position using human-like movement if available
+        
+        Args:
+            distance: Distance in pixels to move from current position
+            
+        Returns:
+            True if movement was successful, False otherwise
+        """
+        try:
+            # Get current mouse position
+            current_x, current_y = pyautogui.position()
+            
+            # Calculate random position at specified distance
+            angle = random.uniform(0, 2 * 3.14159)  # Random angle (2 * pi)
+            new_x = int(current_x + distance * (angle * 2 - 1))  # Convert to -1 to 1 range
+            new_y = int(current_y + distance * (angle * 2 - 1))  # Convert to -1 to 1 range
+            
+            # Ensure the new position is within screen bounds
+            screen_width = pyautogui.size().width
+            screen_height = pyautogui.size().height
+            new_x = max(0, min(new_x, screen_width - 1))
+            new_y = max(0, min(new_y, screen_height - 1))
+            
+            print(f"Random mouse movement: ({current_x}, {current_y}) -> ({new_x}, {new_y})")
+            return self.move_mouse(new_x, new_y, "none")
+                
+        except Exception as e:
+            print(f"Error during random mouse movement: {e}")
+            return False
