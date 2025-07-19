@@ -567,7 +567,7 @@ class RuneScapeBot:
                     print("Burying enabled, clicking in inventory area...")
                     
                     # Wait a moment for the item to appear in inventory
-                    time.sleep(random.uniform(0.5, 1.0))
+                    time.sleep(random.uniform(0.9, 1.8))
                     
                     # Get inventory area coordinates
                     inv_x1, inv_y1, inv_x2, inv_y2 = inventory_area
@@ -751,7 +751,8 @@ class RuneScapeBot:
                 print("Waiting random time (up to 5 minutes, avg 2 seconds)...")
                 # Use exponential distribution for skewed timing: most waits are short, some are longer
                 # This gives us an average of 3 seconds but can go up to 5 minutes
-                wait_time = min(random.expovariate(1/2), 300)  # 1/2 = 2 second average, max 300 seconds (5 minutes)
+                # wait_time = min(random.expovariate(1/2), 300)  # 1/2 = 2 second average, max 300 seconds (5 minutes)
+                wait_time = min(random.expovariate(1/1), 300)  # 1/1 = 1 second average, max 300 seconds (5 minutes)
                 print(f"Waiting {wait_time:.1f} seconds...")
                 time.sleep(wait_time)
                 return True  # Signal to find next target

@@ -187,7 +187,11 @@ def visualize_config(config_file: str, output_file: str = "config_visualization.
         'food_area': (0, 165, 255),     # Golden (BGR: 0, 165, 255 = RGB: 255, 165, 0)
         'inventory_area': (255, 0, 255), # Magenta
         'loot_area': (255, 0, 0),       # Red
-        'target_area': (0, 0, 255)      # Blue
+        'target_area': (0, 0, 255),     # Blue
+        'minimap': (255, 255, 0),       # Cyan
+        'fishing_spot': (0, 255, 255),  # Yellow
+        'bank': (128, 0, 128),          # Purple
+        'polling': (255, 165, 0)        # Orange
     }
     
     # Draw health bar position
@@ -299,15 +303,209 @@ def visualize_config(config_file: str, output_file: str = "config_visualization.
         
         print(f"Drew loot pickup area: center ({center_x}, {center_y}), radius {max_distance}")
     
+    # Draw fishing configuration
+    if config.get('fishing', {}).get('enabled', False):
+        fishing_config = config['fishing']
+        minimap_config = fishing_config.get('minimap', {})
+        
+        # Draw minimap circle
+        if minimap_config.get('center_x') is not None and minimap_config.get('radius') is not None:
+            center_x = minimap_config['center_x']
+            center_y = minimap_config['center_y']
+            radius = minimap_config['radius']
+            
+            # Convert to window-relative coordinates
+            rel_center_x = center_x - window_x
+            rel_center_y = center_y - window_y
+            
+            if (0 <= rel_center_x < window_width and 0 <= rel_center_y < window_height):
+                # Draw minimap center point
+                visualization = draw_point_with_label(
+                    visualization, (rel_center_x, rel_center_y),
+                    f"Minimap Center ({center_x}, {center_y})", 
+                    colors['minimap']
+                )
+                
+                # Draw minimap circle
+                cv2.circle(visualization, (rel_center_x, rel_center_y), int(radius), colors['minimap'], 2)
+                
+                # Add radius label
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.5
+                radius_label = f"Minimap Radius: {radius:.1f}px"
+                (text_width, text_height), baseline = cv2.getTextSize(radius_label, font, font_scale, 2)
+                
+                # Position label at top of circle
+                label_x = rel_center_x - text_width // 2
+                label_y = rel_center_y - int(radius) - 10
+                
+                if label_y >= text_height + 5:  # Ensure label is visible
+                    # Draw label background
+                    cv2.rectangle(visualization, 
+                                  (label_x - 2, label_y - text_height - 2),
+                                  (label_x + text_width + 2, label_y + baseline + 2),
+                                  colors['minimap'], -1)
+                    
+                    # Draw label text
+                    cv2.putText(visualization, radius_label, (label_x, label_y), 
+                               font, font_scale, (255, 255, 255), 2)
+                
+                print(f"Drew minimap: center ({rel_center_x}, {rel_center_y}), radius {radius:.1f}")
+            else:
+                print(f"Minimap center ({rel_center_x}, {rel_center_y}) is outside window bounds")
+        
+        # Draw fishing spot color indicator (if configured)
+        if fishing_config.get('fishing_spot_color'):
+            # Draw a small colored rectangle to show the fishing spot color
+            color_rect_x = 10
+            color_rect_y = window_height - 80
+            color_rect_size = 20
+            
+            # Convert hex color to BGR
+            hex_color = fishing_config['fishing_spot_color']
+            try:
+                # Remove # if present
+                if hex_color.startswith('#'):
+                    hex_color = hex_color[1:]
+                
+                # Convert hex to RGB then to BGR
+                r = int(hex_color[0:2], 16)
+                g = int(hex_color[2:4], 16)
+                b = int(hex_color[4:6], 16)
+                bgr_color = (b, g, r)
+                
+                # Draw color rectangle
+                cv2.rectangle(visualization, 
+                              (color_rect_x, color_rect_y),
+                              (color_rect_x + color_rect_size, color_rect_y + color_rect_size),
+                              bgr_color, -1)
+                
+                # Draw border
+                cv2.rectangle(visualization, 
+                              (color_rect_x, color_rect_y),
+                              (color_rect_x + color_rect_size, color_rect_y + color_rect_size),
+                              colors['fishing_spot'], 2)
+                
+                # Add label
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.5
+                label = f"Fishing Spot: #{fishing_config['fishing_spot_color']}"
+                cv2.putText(visualization, label, (color_rect_x + color_rect_size + 5, color_rect_y + 15), 
+                           font, font_scale, colors['fishing_spot'], 2)
+                
+                print(f"Drew fishing spot color indicator: #{fishing_config['fishing_spot_color']}")
+            except (ValueError, IndexError):
+                print(f"Invalid fishing spot color format: {fishing_config['fishing_spot_color']}")
+        
+        # Draw bank color indicator (if configured)
+        if fishing_config.get('bank_color'):
+            # Draw a small colored rectangle to show the bank color
+            color_rect_x = 10
+            color_rect_y = window_height - 50
+            color_rect_size = 20
+            
+            # Convert hex color to BGR
+            hex_color = fishing_config['bank_color']
+            try:
+                # Remove # if present
+                if hex_color.startswith('#'):
+                    hex_color = hex_color[1:]
+                
+                # Convert hex to RGB then to BGR
+                r = int(hex_color[0:2], 16)
+                g = int(hex_color[2:4], 16)
+                b = int(hex_color[4:6], 16)
+                bgr_color = (b, g, r)
+                
+                # Draw color rectangle
+                cv2.rectangle(visualization, 
+                              (color_rect_x, color_rect_y),
+                              (color_rect_x + color_rect_size, color_rect_y + color_rect_size),
+                              bgr_color, -1)
+                
+                # Draw border
+                cv2.rectangle(visualization, 
+                              (color_rect_x, color_rect_y),
+                              (color_rect_x + color_rect_size, color_rect_y + color_rect_size),
+                              colors['bank'], 2)
+                
+                # Add label
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.5
+                label = f"Bank: #{fishing_config['bank_color']}"
+                cv2.putText(visualization, label, (color_rect_x + color_rect_size + 5, color_rect_y + 15), 
+                           font, font_scale, colors['bank'], 2)
+                
+                print(f"Drew bank color indicator: #{fishing_config['bank_color']}")
+            except (ValueError, IndexError):
+                print(f"Invalid bank color format: {fishing_config['bank_color']}")
+        
+        # Draw polling area (if configured)
+        if fishing_config.get('polling_area', {}).get('x') is not None:
+            polling_x = fishing_config['polling_area']['x']
+            polling_y = fishing_config['polling_area']['y']
+            polling_color = fishing_config['polling_area']['color']
+            
+            # Convert to window-relative coordinates
+            rel_polling_x = polling_x - window_x
+            rel_polling_y = polling_y - window_y
+            
+            if (0 <= rel_polling_x < window_width and 0 <= rel_polling_y < window_height):
+                # Draw polling point
+                visualization = draw_point_with_label(
+                    visualization, (rel_polling_x, rel_polling_y),
+                    f"Polling Area ({polling_x}, {polling_y}) #{polling_color}", 
+                    colors['polling']
+                )
+                print(f"Drew polling area: ({rel_polling_x}, {rel_polling_y})")
+            else:
+                print(f"Polling area ({rel_polling_x}, {rel_polling_y}) is outside window bounds")
+        
+        # Draw drop boxes (if configured)
+        if fishing_config.get('drop_boxes'):
+            for i, drop_box in enumerate(fishing_config['drop_boxes']):
+                x1 = drop_box['x1']
+                y1 = drop_box['y1']
+                x2 = drop_box['x2']
+                y2 = drop_box['y2']
+                drop_color = drop_box['color']
+                
+                # Convert to window-relative coordinates
+                rel_x1 = x1 - window_x
+                rel_y1 = y1 - window_y
+                rel_x2 = x2 - window_x
+                rel_y2 = y2 - window_y
+                
+                if (0 <= rel_x1 < window_width and 0 <= rel_y1 < window_height and 
+                    0 <= rel_x2 < window_width and 0 <= rel_y2 < window_height):
+                    # Draw drop box rectangle
+                    visualization = draw_labeled_box(
+                        visualization, (rel_x1, rel_y1, rel_x2, rel_y2),
+                        f"Drop Box {i+1} ({x1},{y1},{x2},{y2}) #{drop_color}", 
+                        colors['polling']
+                    )
+                    print(f"Drew drop box {i+1}: ({rel_x1}, {rel_y1}) to ({rel_x2}, {rel_y2})")
+                else:
+                    print(f"Drop box {i+1} is outside window bounds")
+    
     # Add configuration summary text
     summary_lines = [
         "Configuration Summary:",
         f"Human Movement: {'Enabled' if config.get('human_movement', {}).get('enabled', False) else 'Disabled'}",
         f"Auto-eating: {'Enabled' if config.get('food_area', {}).get('enabled', False) else 'Disabled'}",
         f"Loot Pickup: {'Enabled' if config.get('loot_pickup', {}).get('enabled', False) else 'Disabled'}",
+        f"Fishing Bot: {'Enabled' if config.get('fishing', {}).get('enabled', False) else 'Disabled'}",
         f"Target Color: #{config.get('combat', {}).get('default_target_color', 'Unknown')}",
         f"Pixel Method: {config.get('combat', {}).get('pixel_method', 'Unknown')}"
     ]
+    
+    # Add fishing-specific summary if enabled
+    if config.get('fishing', {}).get('enabled', False):
+        fishing_config = config['fishing']
+        summary_lines.extend([
+            f"Travel Delay: {fishing_config.get('travel_delay', 'Unknown')}s",
+            f"Fishing Delay: {fishing_config.get('fishing_delay', 'Unknown')}s"
+        ])
     
     # Draw summary text at bottom-left
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -341,6 +539,10 @@ def visualize_config(config_file: str, output_file: str = "config_visualization.
         print("Magenta box: Inventory area (for burying)")
         print("Red circle: Loot pickup area")
         print("Blue: Target color area (not drawn)")
+        print("Cyan circle: Minimap area (fishing)")
+        print("Yellow rectangle: Fishing spot color indicator")
+        print("Purple rectangle: Bank color indicator")
+        print("Orange rectangles: Drop boxes (fishing completion areas)")
         
     except Exception as e:
         print(f"Error saving visualization: {e}")

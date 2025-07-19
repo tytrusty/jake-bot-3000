@@ -6,7 +6,7 @@ import math
 from typing import Tuple, List, Optional, Union
 import numpy as np
 
-class MouseMovement:
+class BezierMouseMovement:
     def __init__(self, speed_factor: Union[float, Tuple[float, float]] = 1.0, jitter_factor: float = 0.1):
         """
         Initialize mouse movement controller

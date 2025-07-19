@@ -3,7 +3,7 @@ import random
 from scipy.ndimage import label, binary_dilation
 from typing import List, Tuple, Optional, Union
 import cv2
-import color_utils
+import jake.color_utils
 
 def random_pixel_select(screenshot: np.ndarray, target_hex: str, tolerance: int = 10) -> Optional[Tuple[int, int]]:
     """
@@ -17,7 +17,7 @@ def random_pixel_select(screenshot: np.ndarray, target_hex: str, tolerance: int 
     Returns:
         Random (x, y) coordinate of matching pixel, or None if no pixels found
     """
-    pixel_coords = color_utils.find_pixels_by_color(screenshot, target_hex, tolerance)
+    pixel_coords = jake.color_utils.find_pixels_by_color(screenshot, target_hex, tolerance)
     
     if not pixel_coords:
         print(f"No pixels found with color {target_hex}")
@@ -27,7 +27,7 @@ def random_pixel_select(screenshot: np.ndarray, target_hex: str, tolerance: int 
     random_pixel = random.choice(pixel_coords)
     return random_pixel
 
-def smart_pixel_select(screenshot: np.ndarray, target_hex: str, tolerance: int = 10, return_debug: bool = False, downsample_factor: int = 4, center_falloff: float = 4.0):
+def smart_pixel_select(screenshot: np.ndarray, target_hex: str, tolerance: int = 10, return_debug: bool = False, downsample_factor: int = 4, center_falloff: float = 10.0):
     """
     Smart pixel selection using blob detection and green exclusion
     
@@ -56,12 +56,12 @@ def smart_pixel_select(screenshot: np.ndarray, target_hex: str, tolerance: int =
     rgb_screen = cv2.cvtColor(downsampled_screenshot, cv2.COLOR_BGR2RGB)
     
     # Get target RGB color
-    target_rgb = color_utils.hex_to_rgb(target_hex)
+    target_rgb = jake.color_utils.hex_to_rgb(target_hex)
     
     # Extract RGB channels
     r, g, b = rgb_screen[:, :, 0], rgb_screen[:, :, 1], rgb_screen[:, :, 2]
     
-    color_distance = color_utils.calculate_color_distance(rgb_screen, target_rgb)
+    color_distance = jake.color_utils.calculate_color_distance(rgb_screen, target_rgb)
     target_mask = color_distance <= tolerance
     green_mask = (g > 200) & (r < 20) & (b < 20)
     

@@ -288,6 +288,7 @@ def main():
                     downsample_factor = 4  # Can be made configurable
                     result = pixel_selection.smart_pixel_select(screenshot, hex_color, tolerance, return_debug=True, downsample_factor=downsample_factor)
                     if isinstance(result, tuple) and len(result) >= 3:
+                        print(f"Result: {result}")
                         if len(result) == 4:
                             selected_pixel, labeled_blobs, filtered_target_mask, prob_heatmap = result
                             # Save probability heatmap

@@ -1,10 +1,10 @@
 import cv2
 import numpy as np
 import pyautogui
-import time
 import os
 from PIL import Image, ImageGrab
 from typing import Tuple, Optional, List
+import jake.color_utils
 
 def capture_screen_region(region: Tuple[int, int, int, int]) -> np.ndarray:
     """
@@ -61,8 +61,7 @@ def save_screenshot(filename: Optional[str] = None,
     """
     try:
         if filename is None:
-            timestamp = int(time.time())
-            filename = f"debug_screenshot_{timestamp}.png"
+            filename = "debug_screenshot.png"
         
         if region is None:
             # Capture full screen
@@ -102,8 +101,7 @@ def save_screenshot_with_highlights(pixels: List[Tuple[int, int]],
     """
     try:
         if filename is None:
-            timestamp = int(time.time())
-            filename = f"debug_highlighted_{timestamp}.png"
+            filename = "debug_highlighted.png"
         
         # Capture the left half of the screen
         screenshot = capture_left_half_screen()
@@ -159,6 +157,136 @@ def get_pixel_color_at_position(x: int, y: int) -> Tuple[int, int, int]:
     except Exception as e:
         print(f"Error getting pixel color: {e}")
         return (0, 0, 0)  # Return black on error
+
+def find_runescape_window(window_title: str = "RuneLite") -> Tuple[int, int, int, int]:
+    """
+    Find the RuneScape window and return its coordinates (x, y, width, height)
+    
+    Args:
+        window_title: Title of the window to search for (default: "RuneLite")
+        
+    Returns:
+        Tuple of (x, y, width, height) coordinates or None if not found
+    """
+    try:
+        # Try to find window by title
+        import win32gui
+        import win32con
+        
+        def enum_windows_callback(hwnd, windows):
+            if win32gui.IsWindowVisible(hwnd):
+                window_title_text = win32gui.GetWindowText(hwnd)
+                if window_title.lower() in window_title_text.lower():
+                    rect = win32gui.GetWindowRect(hwnd)
+                    x, y, w, h = rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]
+                    windows.append((x, y, w, h))
+            return True
+        
+        windows = []
+        win32gui.EnumWindows(enum_windows_callback, windows)
+        
+        if windows:
+            return windows[0]  # Return the first matching window
+        else:
+            raise ValueError(f"Could not find window with title containing '{window_title}'")
+            
+    except ImportError:
+        raise ImportError("win32gui not available. Please install pywin32: pip install pywin32")
+    except Exception as e:
+        raise Exception(f"Error finding window: {e}")
+
+def save_debug_screenshot(region: Tuple[int, int, int, int],
+                         action: str,
+                         screenshot_dir: str = "debug_screenshots",
+                         target_positions: Optional[List[Tuple[int, int, str]]] = None,
+                         color_detection: Optional[Tuple[str, int]] = None,
+                         save_original: bool = False) -> Tuple[bool, str]:
+    """
+    Save a debug screenshot with optional markings and color detection
+    
+    Args:
+        region: Screen region to capture (x, y, width, height)
+        action: Description of the action being performed
+        screenshot_dir: Directory to save screenshots in
+        target_positions: List of (x, y, color_name) tuples to mark with circles
+                         color_name can be "green", "red", "blue", "yellow", etc.
+        color_detection: Tuple of (hex_color, tolerance) for color detection
+        save_original: Whether to save the original unmarked screenshot
+        
+    Returns:
+        Tuple of (success, filename) where success indicates if operation completed
+    """
+    try:
+        # Create screenshot directory if it doesn't exist
+        os.makedirs(screenshot_dir, exist_ok=True)
+        
+        # Capture screenshot
+        screenshot = capture_screen_region(region)
+        if screenshot is None:
+            print("Failed to capture debug screenshot")
+            return False, ""
+        
+        # Create a copy for marking
+        debug_screenshot = screenshot.copy()
+        
+        # Color mapping for different target types
+        color_map = {
+            "green": (0, 255, 0),
+            "red": (0, 0, 255),
+            "blue": (255, 0, 0),
+            "yellow": (0, 255, 255),
+            "white": (255, 255, 255),
+            "black": (0, 0, 0)
+        }
+        
+        # Mark target positions if provided
+        if target_positions:
+            for x, y, color_name in target_positions:
+                color = color_map.get(color_name.lower(), (0, 255, 0))  # Default to green
+                cv2.circle(debug_screenshot, (int(x), int(y)), 10, color, 2)
+                cv2.circle(debug_screenshot, (int(x), int(y)), 2, color, -1)
+        
+        # Perform color detection if requested
+        detection_result = None
+        if color_detection:
+            hex_color, tolerance = color_detection
+            matching_pixels = jake.color_utils.find_pixels_by_color(
+                screenshot, hex_color, tolerance
+            )
+            
+            if matching_pixels:
+                print(f"Color found! {len(matching_pixels)} pixels detected")
+                # Mark all matching pixels with red dots
+                for x, y in matching_pixels:
+                    cv2.circle(debug_screenshot, (x, y), 2, (0, 128, 255), 2)  # Red dot
+                detection_result = True
+            else:
+                print("Color not found on screen")
+                detection_result = False
+        
+        # Determine filename based on what we're doing
+        if color_detection:
+            if detection_result:
+                filename = f"{screenshot_dir}/{action}_color_found.png"
+            else:
+                filename = f"{screenshot_dir}/{action}_color_not_found.png"
+        else:
+            filename = f"{screenshot_dir}/{action}.png"
+        
+        cv2.imwrite(filename, debug_screenshot)
+        print(f"Debug screenshot saved: {filename}")
+        
+        # Save original screenshot if requested
+        if save_original:
+            original_filename = f"{screenshot_dir}/{action}_original.png"
+            cv2.imwrite(original_filename, screenshot)
+            print(f"Original screenshot saved: {original_filename}")
+        
+        return True, filename
+        
+    except Exception as e:
+        print(f"Error saving debug screenshot: {e}")
+        return False, ""
 
 # Example usage
 if __name__ == "__main__":
